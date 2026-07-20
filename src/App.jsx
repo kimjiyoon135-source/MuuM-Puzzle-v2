@@ -109,6 +109,10 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
   const [intro, setIntro] = useState(true)
   const [dragging, setDragging] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [showCompletionScale, setShowCompletionScale] = useState(false)
+  const [showConfetti, setShowConfetti] = useState(false)
+  const completionTimersRef = useRef({ scale: null, confetti: null, finish: null })
+  const soundRef = useRef(null)
 
   useEffect(() => {
     if (intro) return undefined
@@ -120,8 +124,19 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
   }, [intro])
 
   useEffect(() => {
+    const audio = new Audio('/sounds/complete.mp3')
+    audio.preload = 'auto'
+    soundRef.current = audio
+  }, [])
+
+  useEffect(() => {
     const introTimer = window.setTimeout(() => setIntro(false), 750)
-    return () => window.clearTimeout(introTimer)
+    return () => {
+      window.clearTimeout(introTimer)
+      window.clearTimeout(completionTimersRef.current.scale)
+      window.clearTimeout(completionTimersRef.current.confetti)
+      window.clearTimeout(completionTimersRef.current.finish)
+    }
   }, [])
 
   useEffect(() => {
@@ -295,14 +310,16 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
     ctx.fillStyle = '#0b0d15'
     ctx.fillRect(0, 0, state.width, state.height)
 
-    const completionProgress = state.completionStarted == null
+    const completionElapsed = state.completionStarted == null
       ? 0
-      : Math.min(1, (performance.now() - state.completionStarted) / 1400)
+      : (performance.now() - state.completionStarted)
+    const completionProgress = Math.min(1, completionElapsed / 1600)
 
     ctx.fillStyle = '#10131d'
     ctx.fillRect(state.board.x, state.board.y, state.board.w, state.board.h)
-    if (completionProgress < 1) {
-      ctx.strokeStyle = `rgba(255,255,255,${0.20 * (1 - completionProgress)})`
+    if (completionElapsed < 400) {
+      const borderAlpha = 0.20 * (1 - (completionElapsed / 400))
+      ctx.strokeStyle = `rgba(255,255,255,${borderAlpha})`
       ctx.lineWidth = 1
       ctx.setLineDash([7, 7])
       ctx.strokeRect(state.board.x, state.board.y, state.board.w, state.board.h)
@@ -323,9 +340,10 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
 
     drawPlacedPieces(ctx, state, image)
 
-    if (completionProgress > 0) {
+    const fadeProgress = Math.min(1, Math.max(0, (completionElapsed - 400) / 1200))
+    if (fadeProgress > 0) {
       ctx.save()
-      const eased = 1 - Math.pow(1 - completionProgress, 3)
+      const eased = 1 - Math.pow(1 - fadeProgress, 3)
       ctx.globalAlpha = eased
       ctx.drawImage(image, state.board.x, state.board.y, state.board.w, state.board.h)
       ctx.restore()
@@ -561,17 +579,32 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
 
     const placedCount = state.pieces.filter((item) => item.placed).length
     setPlaced(placedCount)
-    if (placedCount === state.pieces.length) {
-      state.completionStarted = performance.now()
+    if (placedCount === state.pieces.length && !completing) {
       setCompleting(true)
+      setShowCompletionScale(true)
+      setShowConfetti(true)
+      state.completionStarted = performance.now()
+
+      if (soundRef.current) {
+        soundRef.current.currentTime = 0
+        soundRef.current.play().catch(() => {})
+      }
+
+      window.clearTimeout(completionTimersRef.current.scale)
+      window.clearTimeout(completionTimersRef.current.confetti)
+      window.clearTimeout(completionTimersRef.current.finish)
+
+      completionTimersRef.current.scale = window.setTimeout(() => setShowCompletionScale(false), 400)
+      completionTimersRef.current.confetti = window.setTimeout(() => setShowConfetti(false), 3000)
+      completionTimersRef.current.finish = window.setTimeout(() => onComplete(elapsedRef.current), 4500)
+
       const animateCompletion = () => {
         draw()
-        if (performance.now() - state.completionStarted < 1500) {
+        if (performance.now() - state.completionStarted < 4500) {
           requestAnimationFrame(animateCompletion)
         }
       }
       requestAnimationFrame(animateCompletion)
-      window.setTimeout(() => onComplete(elapsedRef.current), 1750)
     }
 
     state.drag = null
@@ -600,7 +633,7 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
           <button type="button" onClick={onExit}>나가기</button>
         </div>
       </header>
-      <div className={`canvas-wrap ${dragging ? 'is-dragging' : ''}`} ref={wrapRef}>
+      <div className={`canvas-wrap ${dragging ? 'is-dragging' : ''} ${showCompletionScale ? 'is-scaling' : ''}`} ref={wrapRef}>
         {intro && (
           <div className="puzzle-intro" aria-label="퍼즐 준비 중">
             <div className="intro-bag" aria-hidden="true">🧩</div>
@@ -609,10 +642,17 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
           </div>
         )}
         {completing && (
-          <div className="completion-flash" aria-live="polite">
-            <strong>COMPLETE!</strong>
-            <span>{fmt(elapsedRef.current)}</span>
-          </div>
+          <>
+            {showConfetti && (
+              <div className="completion-confetti" aria-hidden="true">
+                {Array.from({ length: 32 }, (_, index) => <i key={index} style={{ '--i': index }} />)}
+              </div>
+            )}
+            <div className="completion-overlay" aria-live="polite">
+              <strong>MISSION COMPLETE</strong>
+              <span>뮤움을 찾았습니다.</span>
+            </div>
+          </>
         )}
         <canvas
           ref={canvasRef}
@@ -629,7 +669,7 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
 
 export default function App() {
   const [screen, setScreen] = useState('start')
-  const [count] = useState(150)
+  const [count] = useState(9)
   const [record, setRecord] = useState(0)
   const [name, setName] = useState('')
   const [ranking, setRanking] = useState(() => JSON.parse(localStorage.getItem('muum-ranking') || '[]'))
@@ -733,8 +773,8 @@ export default function App() {
           {Array.from({ length: 42 }, (_, index) => <i key={index} style={{ '--i': index }} />)}
         </div>
         <div className="complete-card">
-          <p className="complete-kicker">Mu:uM Hidden Piece</p>
-          <h1>COMPLETE!</h1>
+          <p className="complete-kicker">MISSION COMPLETE</p>
+          <h1>뮤움을 찾았습니다.</h1>
           <div className="complete-image-wrap">
             <img src={IMG} alt="완성된 비밀 사진" />
             <span className="sparkle sparkle-one">✦</span>
@@ -744,8 +784,8 @@ export default function App() {
           <p className="record-label">완성 기록</p>
           <strong className="record-time">{fmt(record)}</strong>
           <div className="complete-actions">
-            <button type="button" className="replay-button" onClick={() => { setGameSession((value) => value + 1); setName(''); setScreen('game') }}>다시 플레이</button>
-            <button type="button" onClick={() => setScreen('start')}>처음 화면</button>
+            <button type="button" className="replay-button" onClick={() => { setGameSession((value) => value + 1); setName(''); setScreen('game') }}>PLAY AGAIN</button>
+            <button type="button" onClick={() => setScreen('start')}>메인으로</button>
           </div>
           <div className="nickname-row">
             <input value={name} onChange={(event) => setName(event.target.value)} maxLength={12} placeholder="닉네임" />
