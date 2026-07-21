@@ -161,6 +161,16 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
   const spawnAnimationRAFRef = useRef(null)
   const completionActiveRef = useRef(false)
   const lastPlacementCompletionRef = useRef(false)
+  const inputStateRef = useRef({
+    mode: 'idle',
+    pointerId: null,
+    pointerType: null,
+    startX: 0,
+    startY: 0,
+    candidateGroupId: null,
+  })
+
+  const TOUCH_DRAG_THRESHOLD = 10
 
   function persistPuzzleState() {
     const state = stateRef.current
@@ -912,7 +922,7 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
   }
 
   function isInsidePiece(ctx, piece, point, pointerType = 'mouse') {
-    const padding = Math.min(piece.w, piece.h) * (pointerType === 'touch' ? 0.75 : 0.28)
+    const padding = Math.min(piece.w, piece.h) * (pointerType === 'touch' ? 0.36 : 0.22)
     if (
       point.x < piece.x - padding ||
       point.x > piece.x + piece.w + padding ||
@@ -920,14 +930,107 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
       point.y > piece.y + piece.h + padding
     ) return false
 
-    if (pointerType === 'touch') return true
-
     ctx.save()
     ctx.beginPath()
     addPiecePath(ctx, piece.x, piece.y, piece.w, piece.h, piece.edges)
-    const hit = ctx.isPointInPath(point.x, point.y)
+    const isPathHit = ctx.isPointInPath(point.x, point.y)
     ctx.restore()
-    return hit
+
+    if (isPathHit) return true
+    if (pointerType !== 'touch') return false
+
+    const centerX = piece.x + piece.w * 0.5
+    const centerY = piece.y + piece.h * 0.5
+    const distance = Math.hypot(point.x - centerX, point.y - centerY)
+    const fallbackRadius = Math.min(piece.w, piece.h) * 0.38
+    return distance <= fallbackRadius
+  }
+
+  function choosePieceForPointer(state, point, pointerType) {
+    const canvas = canvasRef.current
+    if (!canvas) return null
+    const ctx = canvas.getContext('2d')
+
+    if (pointerType !== 'touch') {
+      for (let index = state.pieces.length - 1; index >= 0; index -= 1) {
+        const piece = state.pieces[index]
+        if (!piece.released || piece.placed) continue
+        if (isInsidePiece(ctx, piece, point, pointerType)) return piece
+      }
+      return null
+    }
+
+    const groupSizes = new Map()
+    for (const piece of state.pieces) {
+      if (!piece.released || piece.placed) continue
+      groupSizes.set(piece.groupId, (groupSizes.get(piece.groupId) || 0) + 1)
+    }
+
+    let bestPiece = null
+    let bestScore = -Infinity
+    for (let index = state.pieces.length - 1; index >= 0; index -= 1) {
+      const piece = state.pieces[index]
+      if (!piece.released || piece.placed) continue
+      const bboxPadding = Math.min(piece.w, piece.h) * 0.42
+      if (
+        point.x < piece.x - bboxPadding ||
+        point.x > piece.x + piece.w + bboxPadding ||
+        point.y < piece.y - bboxPadding ||
+        point.y > piece.y + piece.h + bboxPadding
+      ) continue
+
+      ctx.save()
+      ctx.beginPath()
+      addPiecePath(ctx, piece.x, piece.y, piece.w, piece.h, piece.edges)
+      const isPathHit = ctx.isPointInPath(point.x, point.y)
+      ctx.restore()
+
+      const centerX = piece.x + piece.w * 0.5
+      const centerY = piece.y + piece.h * 0.5
+      const distance = Math.hypot(point.x - centerX, point.y - centerY)
+      const maxDistance = Math.min(piece.w, piece.h) * 0.55
+      if (!isPathHit && distance > maxDistance) continue
+
+      const groupSize = groupSizes.get(piece.groupId) || 1
+      const topness = index / Math.max(1, state.pieces.length)
+      const score = (isPathHit ? 1000 : 0) - (groupSize * 8) - distance + topness
+      if (score > bestScore) {
+        bestScore = score
+        bestPiece = piece
+      }
+    }
+
+    return bestPiece
+  }
+
+  function resetInputState() {
+    inputStateRef.current = {
+      mode: 'idle',
+      pointerId: null,
+      pointerType: null,
+      startX: 0,
+      startY: 0,
+      candidateGroupId: null,
+    }
+  }
+
+  function startDragForGroup(state, pointerId, groupId, point, pointerType) {
+    bringGroupToFront(state, groupId)
+    const touchLift = pointerType === 'touch' ? 14 : 0
+    if (touchLift) moveGroup(state, groupId, 0, -touchLift, true)
+    state.drag = {
+      groupId,
+      lastX: point.x,
+      lastY: point.y,
+    }
+    setDragging(true)
+    const canvas = canvasRef.current
+    if (canvas?.setPointerCapture) {
+      try {
+        canvas.setPointerCapture(pointerId)
+      } catch (error) {}
+    }
+    draw()
   }
 
   function groupPieces(state, groupId) {
@@ -1031,35 +1134,80 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
   }
 
   function handlePointerDown(event) {
-    event.preventDefault()
     if (intro) return
     const state = stateRef.current
     const point = pointerPosition(event)
-    const ctx = canvasRef.current.getContext('2d')
+    const piece = choosePieceForPointer(state, point, event.pointerType)
+    if (!piece) {
+      resetInputState()
+      return
+    }
 
-    for (let index = state.pieces.length - 1; index >= 0; index -= 1) {
-      const piece = state.pieces[index]
-      if (!piece.released || piece.placed || !isInsidePiece(ctx, piece, point, event.pointerType)) continue
-
-      bringGroupToFront(state, piece.groupId)
-      const touchLift = event.pointerType === 'touch' ? 20 : 0
-      if (touchLift) moveGroup(state, piece.groupId, 0, -touchLift, true)
-      state.drag = {
-        groupId: piece.groupId,
-        lastX: point.x,
-        lastY: point.y,
+    if (event.pointerType !== 'touch') {
+      event.preventDefault()
+      startDragForGroup(state, event.pointerId, piece.groupId, point, event.pointerType)
+      inputStateRef.current = {
+        mode: 'dragging',
+        pointerId: event.pointerId,
+        pointerType: event.pointerType,
+        startX: point.x,
+        startY: point.y,
+        candidateGroupId: piece.groupId,
       }
-      setDragging(true)
-      canvasRef.current.setPointerCapture(event.pointerId)
-      draw()
-      break
+      return
+    }
+
+    const input = inputStateRef.current
+    if (input.pointerId != null && input.pointerId !== event.pointerId && input.mode !== 'idle') {
+      return
+    }
+
+    inputStateRef.current = {
+      mode: 'pending',
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      startX: point.x,
+      startY: point.y,
+      candidateGroupId: piece.groupId,
     }
   }
 
   function handlePointerMove(event) {
-    if (stateRef.current.drag) event.preventDefault()
     const state = stateRef.current
-    if (!state.drag) return
+    const input = inputStateRef.current
+
+    if (input.pointerId != null && input.pointerId !== event.pointerId) return
+
+    if (input.pointerType === 'touch' && input.mode === 'pending') {
+      const point = pointerPosition(event)
+      const dx = point.x - input.startX
+      const dy = point.y - input.startY
+      const absX = Math.abs(dx)
+      const absY = Math.abs(dy)
+      if (absX < TOUCH_DRAG_THRESHOLD && absY < TOUCH_DRAG_THRESHOLD) return
+
+      if (absY > absX * 1.15) {
+        inputStateRef.current = {
+          ...input,
+          mode: 'scrolling',
+          candidateGroupId: null,
+        }
+        return
+      }
+
+      if (input.candidateGroupId != null) {
+        event.preventDefault()
+        startDragForGroup(state, event.pointerId, input.candidateGroupId, point, 'touch')
+        inputStateRef.current = {
+          ...input,
+          mode: 'dragging',
+        }
+      }
+      return
+    }
+
+    if (!state.drag || input.mode !== 'dragging') return
+    event.preventDefault()
     const point = pointerPosition(event)
     moveGroup(state, state.drag.groupId, point.x - state.drag.lastX, point.y - state.drag.lastY, true)
     state.drag.lastX = point.x
@@ -1068,9 +1216,18 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
   }
 
   function handlePointerUp(event) {
-    event.preventDefault()
+    const input = inputStateRef.current
+    if (input.pointerId != null && input.pointerId !== event.pointerId) return
+
     const state = stateRef.current
-    if (!state.drag) return
+    if (!state.drag || input.mode !== 'dragging') {
+      if (input.mode === 'pending' || input.mode === 'scrolling') {
+        resetInputState()
+      }
+      return
+    }
+
+    event.preventDefault()
 
     let groupId = state.drag.groupId
     // 한 번 놓을 때 연쇄적으로 여러 묶음이 붙을 수 있도록 반복 검사함.
@@ -1099,6 +1256,7 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
     if (canvasRef.current.hasPointerCapture?.(event.pointerId)) {
       canvasRef.current.releasePointerCapture(event.pointerId)
     }
+    resetInputState()
     draw()
   }
 
