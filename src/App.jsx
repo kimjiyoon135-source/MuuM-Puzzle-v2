@@ -12,7 +12,9 @@ const PIECE_SPAWN_VOLUME = 0.45
 const PIECE_CONNECT_SFX = '/sounds/piece-connect.mp3'
 const PIECE_CONNECT_VOLUME = 0.45
 const CAMERA_DELAY_AFTER_PIECE_FIT = 120
-const PUZZLE_STATE_STORAGE_KEY = 'muum-puzzle-state-v1'
+const LEGACY_PUZZLE_STATE_STORAGE_KEY = 'muum-puzzle-state-v1'
+const PROGRESS_SAVE_STORAGE_KEY = 'muum-puzzle-progress-v1'
+const COMPLETE_SAVE_STORAGE_KEY = 'muum-puzzle-complete-v1'
 const DOOR_OPEN_SFX = '/sounds/door-open.mp3'
 const FOOT_STEP_SFX = '/sounds/foot.mp3'
 
@@ -41,21 +43,66 @@ function fmt(sec) {
   return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`
 }
 
-function clearSavedPuzzleState() {
+function readStorageJSON(storageKey) {
   try {
-    localStorage.removeItem(PUZZLE_STATE_STORAGE_KEY)
-  } catch (error) {}
-}
-
-function readSavedPuzzleState() {
-  try {
-    const raw = localStorage.getItem(PUZZLE_STATE_STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     if (!raw) return null
     const parsed = JSON.parse(raw)
     return parsed && typeof parsed === 'object' ? parsed : null
   } catch (error) {
     return null
   }
+}
+
+function writeStorageJSON(storageKey, value) {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(value))
+  } catch (error) {}
+}
+
+function removeStorageKey(storageKey) {
+  try {
+    localStorage.removeItem(storageKey)
+  } catch (error) {}
+}
+
+function clearProgressSave() {
+  removeStorageKey(PROGRESS_SAVE_STORAGE_KEY)
+}
+
+function readProgressSave() {
+  return readStorageJSON(PROGRESS_SAVE_STORAGE_KEY)
+}
+
+function writeProgressSave(save) {
+  writeStorageJSON(PROGRESS_SAVE_STORAGE_KEY, save)
+}
+
+function readCompleteSave() {
+  return readStorageJSON(COMPLETE_SAVE_STORAGE_KEY)
+}
+
+function clearCompleteSave() {
+  removeStorageKey(COMPLETE_SAVE_STORAGE_KEY)
+}
+
+function writeCompleteSave(completeData) {
+  const current = readCompleteSave() || {}
+  const next = {
+    version: 1,
+    completed: true,
+    secretPhotoVisible: true,
+    endingUnlocked: true,
+    endingViewed: false,
+    completedAt: Date.now(),
+    completedTime: null,
+    completedNickname: '',
+    rankingPosition: null,
+    ...current,
+    ...completeData,
+  }
+  writeStorageJSON(COMPLETE_SAVE_STORAGE_KEY, next)
+  return next
 }
 
 function countPlacedPiecesInSave(parsed) {
@@ -77,7 +124,7 @@ function isCompletedPuzzleState(parsed, expectedPiecesCount = null) {
   return explicitComplete || endingComplete || allPiecesPlaced
 }
 
-function isValidPuzzleStateShape(parsed, expectedPiecesCount = null) {
+function isValidProgressSaveShape(parsed, expectedPiecesCount = null) {
   if (!parsed || typeof parsed !== 'object') return false
   if (![1, 2].includes(parsed.version)) return false
   if (!Number.isFinite(parsed.piecesCount)) return false
@@ -96,21 +143,65 @@ function isValidPuzzleStateShape(parsed, expectedPiecesCount = null) {
   return true
 }
 
-function hasRestorablePuzzleState(expectedPiecesCount) {
-  const parsed = readSavedPuzzleState()
+function hasRestorableProgressSave(expectedPiecesCount) {
+  const parsed = readProgressSave()
   if (!parsed) return false
-  if (!isValidPuzzleStateShape(parsed, expectedPiecesCount)) {
-    clearSavedPuzzleState()
+  if (!isValidProgressSaveShape(parsed, expectedPiecesCount)) {
+    clearProgressSave()
     return false
   }
   if (isCompletedPuzzleState(parsed, expectedPiecesCount)) {
+    clearProgressSave()
     return false
   }
-  try {
-    return true
-  } catch (error) {
-    return false
+  return true
+}
+
+function hasSecretPhotoUnlocked() {
+  const completeSave = readCompleteSave()
+  if (!completeSave || typeof completeSave !== 'object') return false
+  return completeSave.completed === true || completeSave.secretPhotoVisible === true
+}
+
+function migrateLegacySaves(expectedPiecesCount) {
+  const legacy = readStorageJSON(LEGACY_PUZZLE_STATE_STORAGE_KEY)
+  if (!legacy) return
+
+  const hasProgress = !!readProgressSave()
+  const hasComplete = !!readCompleteSave()
+
+  if (!isValidProgressSaveShape(legacy)) {
+    removeStorageKey(LEGACY_PUZZLE_STATE_STORAGE_KEY)
+    return
   }
+
+  if (isCompletedPuzzleState(legacy, expectedPiecesCount)) {
+    if (!hasComplete) {
+      writeCompleteSave({
+        completed: true,
+        secretPhotoVisible: true,
+        endingUnlocked: true,
+        completedAt: Number.isFinite(legacy.completedAt) ? legacy.completedAt : Date.now(),
+        completedTime: Number.isFinite(legacy.elapsed) ? legacy.elapsed : null,
+        completedNickname: typeof legacy.completedNickname === 'string' ? legacy.completedNickname : '',
+      })
+    }
+    removeStorageKey(LEGACY_PUZZLE_STATE_STORAGE_KEY)
+    return
+  }
+
+  if (!hasProgress) {
+    const migratedProgress = {
+      ...legacy,
+      version: 2,
+      status: 'active',
+      completed: false,
+      completedAt: null,
+    }
+    writeProgressSave(migratedProgress)
+  }
+
+  removeStorageKey(LEGACY_PUZZLE_STATE_STORAGE_KEY)
 }
 
 function makeEdges(rows, cols) {
@@ -246,18 +337,18 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
     }
 
     try {
-      localStorage.setItem(PUZZLE_STATE_STORAGE_KEY, JSON.stringify(snapshot))
+      writeProgressSave(snapshot)
     } catch (error) {}
   }
 
   function restorePuzzleStateInto(state) {
-    const parsed = readSavedPuzzleState()
-    if (!isValidPuzzleStateShape(parsed, piecesCount)) {
-      clearSavedPuzzleState()
+    const parsed = readProgressSave()
+    if (!isValidProgressSaveShape(parsed, piecesCount)) {
+      clearProgressSave()
       return false
     }
     if (isCompletedPuzzleState(parsed, piecesCount)) {
-      clearSavedPuzzleState()
+      clearProgressSave()
       return false
     }
     if (parsed.rows !== state.rows || parsed.cols !== state.cols) return false
@@ -790,12 +881,14 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
   function triggerCompletion({ isTest = false } = {}) {
     if (completionActiveRef.current) return
     completionActiveRef.current = true
-    persistPuzzleState({
-      status: 'completed',
+    writeCompleteSave({
       completed: true,
+      secretPhotoVisible: true,
+      endingUnlocked: true,
       completedAt: Date.now(),
-      placedCount: stateRef.current.pieces.length,
+      completedTime: elapsedRef.current,
     })
+    clearProgressSave()
     setCompleting(true)
     setShowCompletionScale(true)
     setShowConfetti(false)
@@ -1522,7 +1615,8 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [muted, setMuted] = useState(false)
   const [gameSession, setGameSession] = useState(0)
-  const [showSavedGamePrompt, setShowSavedGamePrompt] = useState(false)
+  const [hasProgressSave, setHasProgressSave] = useState(() => hasRestorableProgressSave(150))
+  const [completeSave, setCompleteSave] = useState(() => readCompleteSave())
   const [playerOpen, setPlayerOpen] = useState(false)
   const playerRef = useRef(null)
   const [playerSafeArea, setPlayerSafeArea] = useState(null)
@@ -1536,6 +1630,17 @@ export default function App() {
   const doorOpenSoundRef = useRef(null)
   const footStepSoundRef = useRef(null)
   const endingEnterLockedRef = useRef(false)
+
+  const refreshSaveIndicators = () => {
+    setHasProgressSave(hasRestorableProgressSave(count))
+    setCompleteSave(readCompleteSave())
+  }
+
+  const getRankingPosition = (nickname, timeValue) => {
+    if (!nickname || !Number.isFinite(timeValue)) return null
+    const index = ranking.findIndex((item) => item.name === nickname && item.time === timeValue)
+    return index >= 0 ? index + 1 : null
+  }
 
   const clearEndingTimers = () => {
     for (const timerId of endingTimersRef.current) {
@@ -1608,7 +1713,7 @@ export default function App() {
   }
 
   const triggerEndingSequence = () => {
-    if (screen !== 'complete') return
+    if (screen !== 'complete' && screen !== 'photo') return
     if (endingStep !== 'idle') return
 
     resetEndingState()
@@ -1753,10 +1858,10 @@ export default function App() {
 
     scheduleEnding(() => {
       if (token !== endingRunTokenRef.current) return
-      clearSavedPuzzleState()
-      setShowSavedGamePrompt(false)
+      writeCompleteSave({ endingViewed: true, endingUnlocked: true })
       setName('')
       setGameSession((value) => value + 1)
+      refreshSaveIndicators()
       setScreen('start')
     }, 830)
   }
@@ -1787,6 +1892,17 @@ export default function App() {
     audio.volume = 0.65
     audio.muted = muted
   }, [muted])
+
+  useEffect(() => {
+    migrateLegacySaves(count)
+    refreshSaveIndicators()
+  }, [count])
+
+  useEffect(() => {
+    if (screen === 'start') {
+      refreshSaveIndicators()
+    }
+  }, [screen])
 
   const loadTrack = (trackIndex, shouldPlay = true, recordHistory = true) => {
     const audio = audioRef.current
@@ -1962,19 +2078,39 @@ export default function App() {
   }, [])
 
   const complete = (time) => {
+    clearProgressSave()
+    writeCompleteSave({
+      completed: true,
+      secretPhotoVisible: true,
+      endingUnlocked: true,
+      completedAt: Date.now(),
+      completedTime: time,
+    })
     setRecord(time)
+    refreshSaveIndicators()
     setScreen('complete')
   }
 
   const save = () => {
     if (!name.trim()) return
+    const trimmedName = name.trim()
     const next = [...ranking, {
-      name: name.trim(),
+      name: trimmedName,
       time: record,
       date: new Date().toLocaleDateString(),
     }].sort((a, b) => a.time - b.time).slice(0, 50)
+
+    const rankingPosition = next.findIndex((item) => item.name === trimmedName && item.time === record)
+    writeCompleteSave({
+      completedNickname: trimmedName,
+      completedTime: record,
+      rankingPosition: rankingPosition >= 0 ? rankingPosition + 1 : null,
+      secretPhotoVisible: true,
+    })
+
     setRanking(next)
     localStorage.setItem('muum-ranking', JSON.stringify(next))
+    refreshSaveIndicators()
     endingRunTokenRef.current += 1
     resetEndingState()
     setScreen('ranking')
@@ -1986,34 +2122,43 @@ export default function App() {
   }
 
   const startNewGameFromStartScreen = () => {
-    clearSavedPuzzleState()
+    clearProgressSave()
     endingRunTokenRef.current += 1
     resetEndingState()
-    setShowSavedGamePrompt(false)
+    setRecord(0)
+    setName('')
     setGameSession((value) => value + 1)
+    refreshSaveIndicators()
     ensureMusicForGame()
     setScreen('game')
   }
 
   const continueSavedGameFromStartScreen = () => {
-    if (!hasRestorablePuzzleState(count)) {
+    if (!hasRestorableProgressSave(count)) {
+      refreshSaveIndicators()
       startNewGameFromStartScreen()
       return
     }
     endingRunTokenRef.current += 1
     resetEndingState()
-    setShowSavedGamePrompt(false)
     setGameSession((value) => value + 1)
     ensureMusicForGame()
     setScreen('game')
   }
 
-  const handleStartButtonClick = () => {
-    if (hasRestorablePuzzleState(count)) {
-      setShowSavedGamePrompt(true)
-      return
+  const openSecretPhotoView = () => {
+    const saved = readCompleteSave()
+    if (!saved || !hasSecretPhotoUnlocked()) return
+
+    if (Number.isFinite(saved.completedTime)) {
+      setRecord(saved.completedTime)
     }
-    startNewGameFromStartScreen()
+    if (typeof saved.completedNickname === 'string' && saved.completedNickname.trim()) {
+      setName(saved.completedNickname.trim())
+    }
+    endingRunTokenRef.current += 1
+    resetEndingState()
+    setScreen('photo')
   }
 
   useEffect(() => {
@@ -2078,7 +2223,10 @@ export default function App() {
   let content
   if (screen === 'game') {
     content = <Puzzle key={gameSession} piecesCount={count} onComplete={complete} onExit={() => setScreen('start')} safeArea={playerSafeArea} />
-  } else if (screen === 'complete') {
+  } else if (screen === 'complete' || screen === 'photo') {
+    const isPhotoView = screen === 'photo'
+    const photoName = completeSave?.completedNickname?.trim() || '-'
+    const rankingPosition = Number.isFinite(completeSave?.rankingPosition) ? completeSave.rankingPosition : getRankingPosition(photoName === '-' ? null : photoName, record)
     content = (
       <main className="complete-screen">
         <div className="confetti" aria-hidden="true">
@@ -2098,15 +2246,31 @@ export default function App() {
           <div className="complete-summary">
             <p className="record-label">완성 기록</p>
             <strong className="record-time">{fmt(record)}</strong>
-            <div className="nickname-row">
-              <input value={name} onChange={(event) => setName(event.target.value)} maxLength={12} placeholder="닉네임" />
-              <button type="button" onClick={save}>랭킹 등록</button>
-            </div>
+            {!isPhotoView ? (
+              <div className="nickname-row">
+                <input value={name} onChange={(event) => setName(event.target.value)} maxLength={12} placeholder="닉네임" />
+                <button type="button" onClick={save}>랭킹 등록</button>
+              </div>
+            ) : (
+              <div className="photo-meta" role="status" aria-live="polite">
+                <p>완료 닉네임: {photoName}</p>
+                <p>{rankingPosition ? `랭킹 ${rankingPosition}위` : '랭킹 정보 없음'}</p>
+              </div>
+            )}
           </div>
           <div className="complete-actions">
-            <button type="button" className="replay-button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); clearSavedPuzzleState(); setGameSession((value) => value + 1); setName(''); setScreen('game') }}>PLAY AGAIN</button>
-            <button type="button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); setScreen('start') }}>메인으로</button>
-            <button type="button" className="hidden-ending-trigger" onClick={triggerEndingSequence}>...</button>
+            {!isPhotoView ? (
+              <>
+                <button type="button" className="replay-button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); clearProgressSave(); setGameSession((value) => value + 1); setName(''); refreshSaveIndicators(); setScreen('game') }}>PLAY AGAIN</button>
+                <button type="button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); setScreen('start') }}>메인으로</button>
+                <button type="button" className="hidden-ending-trigger" onClick={triggerEndingSequence}>...</button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="replay-button" onClick={triggerEndingSequence}>ENDING 다시 보기</button>
+                <button type="button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); setScreen('start') }}>메인으로</button>
+              </>
+            )}
           </div>
         </div>
       </main>
@@ -2137,21 +2301,22 @@ export default function App() {
           <div className="divider" />
           <h2>HIDDEN PIECE</h2>
           <p className="game-description">모든 조각을 맞추는 순간,<br />비밀이 모습을 드러냅니다.</p>
-          <button type="button" className="start-button" onClick={handleStartButtonClick}>START</button>
-          <button type="button" className="text-button" onClick={() => setScreen('ranking')}>RANKING</button>
+          <div className="start-actions start-main-actions">
+            {hasProgressSave && (
+              <button type="button" className="start-button" onClick={continueSavedGameFromStartScreen}>CONTINUE</button>
+            )}
+            <button type="button" className="start-button" onClick={startNewGameFromStartScreen}>NEW GAME</button>
+            <button type="button" className="text-button" onClick={() => setScreen('ranking')}>RANKING</button>
+          </div>
+          {hasSecretPhotoUnlocked() && (
+            <div className="hidden-secret-section" aria-label="Secret Photo Section">
+              <div className="hidden-secret-separator" aria-hidden="true" />
+              <button type="button" className="start-button" onClick={openSecretPhotoView}>SECRET PHOTO</button>
+              <div className="hidden-secret-separator" aria-hidden="true" />
+            </div>
+          )}
         </section>
         <div className="start-version-label" aria-hidden="true">{APP_VERSION_LABEL}</div>
-        {showSavedGamePrompt && (
-          <div className="saved-game-modal-backdrop" role="presentation">
-            <div className="saved-game-modal" role="dialog" aria-modal="true" aria-labelledby="saved-game-title">
-              <h3 id="saved-game-title">이전 게임이 저장되어 있습니다.</h3>
-              <div className="saved-game-modal-actions">
-                <button type="button" onClick={continueSavedGameFromStartScreen}>이어하기</button>
-                <button type="button" onClick={startNewGameFromStartScreen}>새 게임</button>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
     )
   }
@@ -2225,7 +2390,7 @@ export default function App() {
         </div>
       )}
 
-      {screen === 'complete' && endingStep !== 'idle' && (
+      {(screen === 'complete' || screen === 'photo') && endingStep !== 'idle' && (
         <div
           className={`teaser-overlay ${endingStep !== 'fade-start' ? 'is-darkening' : ''} ${endingStep === 'exiting' ? 'is-exiting' : ''} ${(endingStep === 'navy-fade' || endingStep === 'navy-rest' || endingStep === 'final-coming' || endingStep === 'final-title' || endingStep === 'final-handle' || endingStep === 'final-home' || endingStep === 'exit-start' || endingStep === 'exiting') ? 'is-navy-ending' : ''}`}
           aria-live="polite"
