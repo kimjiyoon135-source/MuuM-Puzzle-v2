@@ -19,9 +19,6 @@ const CAMERA_DELAY_AFTER_PIECE_FIT = 120
 const LEGACY_PUZZLE_STATE_STORAGE_KEY = 'muum-puzzle-state-v1'
 const PROGRESS_SAVE_STORAGE_KEY = 'muum-puzzle-progress-v1'
 const COMPLETE_SAVE_STORAGE_KEY = 'muum-puzzle-complete-v1'
-const RANKING_STORAGE_KEY = 'muum-ranking'
-const SHARED_RANKING_API_PATH = '/api/rankings'
-const SHARED_RANKING_GAME_VERSION = '1.0.0'
 const DOOR_OPEN_SFX = '/sounds/door-open.mp3'
 const FOOT_STEP_SFX = '/sounds/foot.mp3'
 
@@ -71,46 +68,6 @@ function removeStorageKey(storageKey) {
   try {
     localStorage.removeItem(storageKey)
   } catch (error) {}
-}
-
-function readLocalRanking() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(RANKING_STORAGE_KEY) || '[]')
-    return Array.isArray(parsed) ? parsed : []
-  } catch (error) {
-    return []
-  }
-}
-
-function normalizeSharedRankings(items) {
-  if (!Array.isArray(items)) return []
-  return items
-    .filter((item) => item && typeof item === 'object')
-    .map((item) => {
-      const name = typeof item.nickname === 'string' ? item.nickname.trim() : ''
-      const time = Number(item.clear_time_ms)
-      const date = typeof item.created_at === 'string' ? item.created_at : ''
-      return {
-        name,
-        time,
-        date,
-      }
-    })
-    .filter((item) => item.name && Number.isFinite(item.time) && item.time >= 0)
-}
-
-async function fetchSharedRankings() {
-  const response = await fetch(SHARED_RANKING_API_PATH)
-  if (!response.ok) {
-    throw new Error(`GET ${SHARED_RANKING_API_PATH} failed: ${response.status}`)
-  }
-
-  const payload = await response.json()
-  if (!payload?.success || !Array.isArray(payload.rankings)) {
-    throw new Error('Invalid shared ranking response shape')
-  }
-
-  return normalizeSharedRankings(payload.rankings)
 }
 
 function clearProgressSave() {
@@ -1652,7 +1609,7 @@ export default function App() {
   const [count] = useState(PUZZLE_PIECES)
   const [record, setRecord] = useState(0)
   const [name, setName] = useState('')
-  const [ranking, setRanking] = useState(() => readLocalRanking())
+  const [ranking, setRanking] = useState(() => JSON.parse(localStorage.getItem('muum-ranking') || '[]'))
   const audioRef = useRef(null)
   const queueRef = useRef([])
   const queuePositionRef = useRef(0)
@@ -2157,18 +2114,18 @@ export default function App() {
     })
 
     setRanking(next)
-    localStorage.setItem(RANKING_STORAGE_KEY, JSON.stringify(next))
+    localStorage.setItem('muum-ranking', JSON.stringify(next))
     const clearTimeMs = Math.max(0, Math.round(record * 1000))
     void fetch('/api/rankings', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         nickname: trimmedName,
         clearTimeMs,
-        gameVersion: SHARED_RANKING_GAME_VERSION,
-      }),
+        gameVersion: '1.0.0'
+      })
     })
       .then(async (response) => {
         if (response.ok) return
@@ -2189,28 +2146,6 @@ export default function App() {
     resetEndingState()
     setScreen('ranking')
   }
-
-  useEffect(() => {
-    if (screen !== 'ranking') return undefined
-
-    let cancelled = false
-
-    const loadRanking = async () => {
-      try {
-        const sharedRanking = await fetchSharedRankings()
-        if (!cancelled) setRanking(sharedRanking)
-      } catch (error) {
-        console.error('[ranking] Failed to load shared ranking. Falling back to local ranking.', error)
-        if (!cancelled) setRanking(readLocalRanking())
-      }
-    }
-
-    loadRanking()
-
-    return () => {
-      cancelled = true
-    }
-  }, [screen])
 
   const ensureMusicForGame = () => {
     if (!musicStarted) startMusic()
