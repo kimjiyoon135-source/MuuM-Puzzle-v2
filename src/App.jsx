@@ -161,6 +161,7 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
   const spawnAnimationRAFRef = useRef(null)
   const completionActiveRef = useRef(false)
   const lastPlacementCompletionRef = useRef(false)
+  const draggingRef = useRef(false)
   const inputStateRef = useRef({
     mode: 'idle',
     pointerId: null,
@@ -405,6 +406,19 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
     return () => {
       window.clearTimeout(introTimer)
       Object.values(completionTimersRef.current).forEach((timerId) => window.clearTimeout(timerId))
+    }
+  }, [])
+
+  useEffect(() => {
+    const blockTouchScrollWhileDragging = (event) => {
+      const input = inputStateRef.current
+      if (input.mode !== 'dragging' || input.pointerType !== 'touch' || !draggingRef.current) return
+      event.preventDefault()
+    }
+
+    window.addEventListener('touchmove', blockTouchScrollWhileDragging, { passive: false })
+    return () => {
+      window.removeEventListener('touchmove', blockTouchScrollWhileDragging)
     }
   }, [])
 
@@ -1000,6 +1014,7 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
   }
 
   function resetInputState() {
+    draggingRef.current = false
     inputStateRef.current = {
       mode: 'idle',
       pointerId: null,
@@ -1018,6 +1033,7 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
       lastY: point.y,
     }
     setDragging(true)
+    draggingRef.current = true
     const canvas = canvasRef.current
     if (canvas?.setPointerCapture) {
       try {
@@ -1207,6 +1223,7 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
 
     state.drag = null
     setDragging(false)
+    draggingRef.current = false
     if (canvasRef.current.hasPointerCapture?.(event.pointerId)) {
       canvasRef.current.releasePointerCapture(event.pointerId)
     }
