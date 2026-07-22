@@ -1545,7 +1545,9 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
           <span>{placed}/{piecesCount}</span>
           {!intro && released < piecesCount && (
             <button type="button" className="bag-button" onClick={releasePieces}>
-              🧩 조각 꺼내기 <b>{piecesCount - released}</b>
+              <span aria-hidden="true">🧩</span>
+              <span>조각 뽑기</span>
+              <span className="bag-count">{piecesCount - released}</span>
             </button>
           )}
           <button type="button" onClick={onExit}>나가기</button>
