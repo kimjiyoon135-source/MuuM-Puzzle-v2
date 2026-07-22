@@ -1534,6 +1534,7 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
   return (
     <div className={`game-screen ${completing ? 'is-completing' : ''}`}>
       <header className="game-header">
+        <b>Mu:uM Hidden Piece</b>
         <div className="top-pills">
           <button type="button" className="guide-toggle-button" onClick={() => setGuideEnabled((value) => !value)}>
             {guideEnabled ? '가이드 ON' : '가이드 OFF'}

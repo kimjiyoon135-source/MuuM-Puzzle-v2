@@ -55,20 +55,21 @@
 .canvas-wrap canvas{transition:filter .16s ease}.canvas-wrap.is-dragging,.canvas-wrap.is-dragging canvas{touch-action:none!important;overscroll-behavior:none}.canvas-wrap.is-dragging canvas{cursor:grabbing}.bag-button{transition:transform .16s ease,filter .16s ease}.bag-button:hover{transform:translateY(-1px)}.bag-button:active{transform:scale(.97)}
 
 .game-screen{--top-ui-width:min(100%,620px)}
-.game-screen .game-header{max-width:var(--top-ui-width);margin:0 auto 8px;display:block}
+.game-screen .game-header{max-width:var(--top-ui-width);margin:0 auto 6px;display:block}
+.game-screen .game-header b{display:block;font-size:clamp(1.36rem,4.1vw,2.05rem);font-weight:800;margin:0 0 13px;color:#fff}
 .top-pills{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;width:100%}
-.top-pills>button,.top-pills .time-pill{height:42px;padding:0 18px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(17,24,39,.8);color:#fff;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;white-space:nowrap}
+.top-pills>button,.top-pills .time-pill{height:42px;padding:0 18px;border:1px solid #ffffff55;border-radius:999px;background:#111827cc;color:#fff;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;white-space:nowrap;font-size:.95rem;font-weight:700;line-height:1}
 .top-pills>button:first-child{justify-self:start}
-.top-pills .time-pill{justify-self:center;min-width:150px;font-weight:700;letter-spacing:.04em}
+.top-pills .time-pill{justify-self:center;min-width:150px;letter-spacing:.04em}
 .top-pills>button:last-child{justify-self:end}
-.top-pills .guide-toggle-button{margin-top:0;font-size:.95rem;padding:0 18px}
-.top-pills>button:last-child{font-size:1rem}
+.top-pills .guide-toggle-button{margin-top:0;padding:0 18px}
 
-.game-screen .progress-wrap{width:var(--top-ui-width);max-width:var(--top-ui-width);margin:0 auto 8px}
-.game-screen .progress-info{justify-content:center;text-align:center;margin:8px 0 8px}
+.game-screen .progress-wrap{width:var(--top-ui-width);max-width:var(--top-ui-width);margin:0 auto 6px}
+.game-screen .progress-info{justify-content:center;text-align:center;margin:8px 0 8px;font-size:.84rem;color:#ffffff9c}
+.game-screen .progress-info .progress-percent{color:#ffffff82;font-size:.82rem}
 .game-screen .progress-track{width:100%}
 
-.progress-wrap .bag-button{position:relative;display:flex;align-items:center;justify-content:flex-end;width:100%;min-height:52px;padding:10px 16px;border-color:#fff!important;background:#fff!important;color:#10131d!important;font-weight:700;gap:0;white-space:nowrap}
+.progress-wrap .bag-button{position:relative;display:flex;align-items:center;justify-content:flex-end;width:100%;min-height:52px;padding:10px 18px;border-radius:999px;border-color:#fff!important;background:#fff!important;color:#10131d!important;font-weight:700;gap:0;white-space:nowrap;box-shadow:0 10px 24px rgba(0,0,0,.18)}
 .progress-wrap .bag-button .bag-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:10px;font-weight:700}
 .progress-wrap .bag-button .bag-count{margin-left:auto;font-weight:500;letter-spacing:.01em}
 
