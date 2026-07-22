@@ -54,8 +54,23 @@
 /* STEP 3 쨌 議곗옉媛?媛쒖꽑 */
 .canvas-wrap canvas{transition:filter .16s ease}.canvas-wrap.is-dragging,.canvas-wrap.is-dragging canvas{touch-action:none!important;overscroll-behavior:none}.canvas-wrap.is-dragging canvas{cursor:grabbing}.bag-button{transition:transform .16s ease,filter .16s ease}.bag-button:hover{transform:translateY(-1px)}.bag-button:active{transform:scale(.97)}
 
-.stats .bag-button{display:inline-flex;align-items:center;justify-content:flex-start;gap:10px;padding:9px 16px;min-height:40px;background:#fff!important;color:#10131d!important;border-color:#fff!important;font-weight:700;white-space:nowrap}
-.stats .bag-button .bag-count{margin-left:16px;font-weight:500;letter-spacing:.01em}
+.game-screen{--top-ui-width:min(100%,620px)}
+.game-screen .game-header{max-width:var(--top-ui-width);margin:0 auto 8px;display:block}
+.top-pills{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;width:100%}
+.top-pills>button,.top-pills .time-pill{height:42px;padding:0 18px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(17,24,39,.8);color:#fff;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;white-space:nowrap}
+.top-pills>button:first-child{justify-self:start}
+.top-pills .time-pill{justify-self:center;min-width:150px;font-weight:700;letter-spacing:.04em}
+.top-pills>button:last-child{justify-self:end}
+.top-pills .guide-toggle-button{margin-top:0;font-size:.95rem;padding:0 18px}
+.top-pills>button:last-child{font-size:1rem}
+
+.game-screen .progress-wrap{width:var(--top-ui-width);max-width:var(--top-ui-width);margin:0 auto 8px}
+.game-screen .progress-info{justify-content:center;text-align:center;margin:8px 0 8px}
+.game-screen .progress-track{width:100%}
+
+.progress-wrap .bag-button{position:relative;display:flex;align-items:center;justify-content:flex-end;width:100%;min-height:52px;padding:10px 16px;border-color:#fff!important;background:#fff!important;color:#10131d!important;font-weight:700;gap:0;white-space:nowrap}
+.progress-wrap .bag-button .bag-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:10px;font-weight:700}
+.progress-wrap .bag-button .bag-count{margin-left:auto;font-weight:500;letter-spacing:.01em}
 
 /* STEP 4 쨌 ?먮낯 ?ъ쭊???몄텧?섏? ?딅뒗 ?쒖옉 ?곗텧 */
 .puzzle-intro{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:radial-gradient(circle at center,#171b29 0,#090b12 64%,#06070b 100%);pointer-events:auto;animation:introFade .75s ease forwards}.puzzle-intro strong{font-size:clamp(1.25rem,4vw,2.2rem);letter-spacing:.18em;animation:introText .65s ease both}.puzzle-intro span{color:#ffffffa3;letter-spacing:.08em;animation:introText .65s .05s ease both}.intro-bag{display:grid;place-items:center;width:104px;height:104px;border:1px solid #ffffff2e;border-radius:30px;background:#ffffff0c;font-size:3.4rem;transform-origin:50% 85%;animation:bagDrop .42s cubic-bezier(.2,.9,.25,1) both,bagShake .18s .42s ease-in-out 1}.intro-bag::after{content:'';position:absolute;width:132px;height:22px;border-radius:50%;background:#0008;filter:blur(7px);transform:translateY(70px);z-index:-1;animation:shadowPop 1s ease both}@keyframes bagDrop{0%{transform:translateY(-180px) rotate(-8deg);opacity:0}70%{transform:translateY(12px) rotate(4deg);opacity:1}100%{transform:translateY(0) rotate(0)}}@keyframes bagShake{0%,100%{transform:rotate(0)}25%{transform:rotate(-6deg) scale(1.03)}50%{transform:rotate(6deg) scale(1.05)}75%{transform:rotate(-4deg) scale(1.03)}}@keyframes shadowPop{0%{opacity:0;transform:translateY(70px) scale(.4)}100%{opacity:1;transform:translateY(70px) scale(1)}}@keyframes introText{0%{opacity:0;transform:translateY(10px)}35%,75%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-5px)}}@keyframes introFade{0%,82%{opacity:1;visibility:visible}100%{opacity:0;visibility:hidden}}
@@ -221,7 +236,7 @@
 /* v7 쨌 start screen copy and mobile profile framing */
 .game-description{margin:18px 0 28px;line-height:1.7;font-size:clamp(1rem,3.4vw,1.25rem);text-shadow:0 2px 10px #0008}
 @media(max-width:700px){.start-content{padding:28px 22px}.logo{font-size:clamp(4rem,22vw,6.5rem)}.divider{margin:20px}.start-content h2{letter-spacing:.08em}.start-actions .start-button,.start-actions .text-button{min-width:240px;min-height:64px}}
-@media(max-width:700px){.stats .bag-button{flex:0 0 auto;width:auto;min-width:0;padding:8px 14px;min-height:38px;font-size:.95rem}.stats .bag-button .bag-count{margin-left:12px}}
+@media(max-width:700px){.game-screen{--top-ui-width:min(100%,560px)}.top-pills{grid-template-columns:auto 1fr auto;gap:8px}.top-pills>button,.top-pills .time-pill{height:40px;padding:0 14px}.top-pills .time-pill{min-width:98px;width:auto}.progress-wrap .bag-button{min-height:48px;padding:8px 14px}.progress-wrap .bag-button .bag-center{gap:8px}.progress-wrap .bag-button .bag-count{font-size:.95rem}}
 
 /* start modal: continue / new game */
 .saved-game-modal-backdrop{position:absolute;inset:0;z-index:4;background:rgba(8,10,16,.58);display:flex;align-items:center;justify-content:center;padding:20px}

@@ -1534,26 +1534,24 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
   return (
     <div className={`game-screen ${completing ? 'is-completing' : ''}`}>
       <header className="game-header">
-        <div>
-          <b>Mu:uM Hidden Piece</b>
+        <div className="top-pills">
           <button type="button" className="guide-toggle-button" onClick={() => setGuideEnabled((value) => !value)}>
             {guideEnabled ? '가이드 ON' : '가이드 OFF'}
           </button>
-        </div>
-        <div className="stats">
-          <span>{fmt(elapsed)}</span>
-          <span>{placed}/{piecesCount}</span>
-          {!intro && released < piecesCount && (
-            <button type="button" className="bag-button" onClick={releasePieces}>
-              <span aria-hidden="true">🧩</span>
-              <span>조각 뽑기</span>
-              <span className="bag-count">{piecesCount - released}</span>
-            </button>
-          )}
+          <span className="time-pill" aria-live="off">{fmt(elapsed)}</span>
           <button type="button" onClick={onExit}>나가기</button>
         </div>
       </header>
       <div className="progress-wrap">
+        {!intro && released < piecesCount && (
+          <button type="button" className="bag-button" onClick={releasePieces}>
+            <span className="bag-center">
+              <span aria-hidden="true">🧩</span>
+              <span>조각 뽑기</span>
+            </span>
+            <span className="bag-count">×{piecesCount - released}</span>
+          </button>
+        )}
         <div className="progress-info">{placed} / {piecesCount} <span className="progress-percent">· {Math.round((placed / piecesCount) * 100)}%</span></div>
         <div className="progress-track" aria-hidden="true">
           <div className="progress-fill" style={{ width: `${Math.min(100, Math.round((placed / piecesCount) * 100))}%` }} />
