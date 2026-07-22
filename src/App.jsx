@@ -131,7 +131,7 @@ function addPiecePath(ctx, x, y, w, h, edges) {
   ctx.closePath()
 }
 
-function Puzzle({ piecesCount, onComplete, onExit }) {
+function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
   const canvasRef = useRef(null)
   const wrapRef = useRef(null)
   const imageRef = useRef(null)
@@ -432,6 +432,10 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
       setup()
     }
   }, [piecesCount])
+
+  useEffect(() => {
+    normalizeLoosePiecesAroundSafeArea()
+  }, [safeArea])
 
   function clearCompletionTimers() {
     Object.values(completionTimersRef.current).forEach((timerId) => window.clearTimeout(timerId))
@@ -781,6 +785,7 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
   function releasePieces() {
     const state = stateRef.current
     if (!state.board) return
+    const safeRect = getSafeAreaInCanvas(state)
 
     const hidden = state.pieces.filter((piece) => !piece.released)
     if (hidden.length === 0) return
@@ -847,6 +852,9 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
           score += overlapX * overlapY
         }
       }
+      if (safeRect && rectsOverlap({ left: x, top: y, right: x + piece.w, bottom: y + piece.h }, safeRect)) {
+        score += state.width * state.height
+      }
       return score
     }
 
@@ -862,9 +870,23 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
       for (let attempt = 0; attempt < 18; attempt += 1) {
         const candidateX = region.x + Math.random() * (maxX - region.x)
         const candidateY = region.y + Math.random() * (maxY - region.y)
-        const score = getOverlapScore(candidateX, candidateY, piece)
+        let nextX = candidateX
+        let nextY = candidateY
+        if (safeRect) {
+          const escape = getSafeAreaEscapeDelta(
+            { left: nextX, top: nextY, right: nextX + piece.w, bottom: nextY + piece.h },
+            safeRect,
+            state,
+          )
+          if (escape && (escape.dx || escape.dy)) {
+            nextX += escape.dx
+            nextY += escape.dy
+          }
+        }
+
+        const score = getOverlapScore(nextX, nextY, piece)
         if (best === null || score < best.score) {
-          best = { x: candidateX, y: candidateY, score }
+          best = { x: nextX, y: nextY, score }
           if (score === 0) break
         }
       }
@@ -905,6 +927,7 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
       // actually reveal the piece (mark released and set spawn time)
       piece.released = true
       piece.spawnedAt = performance.now()
+      keepGroupOutOfSafeArea(stateRef.current, piece.groupId)
       setReleased((s) => s + 1)
       // play spawn sound (slightly louder)
       try {
@@ -1075,6 +1098,104 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
     }
   }
 
+  function getGroupBounds(members) {
+    return {
+      left: Math.min(...members.map((piece) => piece.x)),
+      right: Math.max(...members.map((piece) => piece.x + piece.w)),
+      top: Math.min(...members.map((piece) => piece.y)),
+      bottom: Math.max(...members.map((piece) => piece.y + piece.h)),
+    }
+  }
+
+  function rectsOverlap(rectA, rectB) {
+    return !(
+      rectA.right <= rectB.left ||
+      rectA.left >= rectB.right ||
+      rectA.bottom <= rectB.top ||
+      rectA.top >= rectB.bottom
+    )
+  }
+
+  function getSafeAreaInCanvas(state) {
+    if (!safeArea) return null
+    const canvas = canvasRef.current
+    if (!canvas || !state?.width || !state?.height) return null
+
+    const rect = canvas.getBoundingClientRect()
+    const padding = 10
+    const left = Math.max(0, safeArea.left - rect.left - padding)
+    const top = Math.max(0, safeArea.top - rect.top - padding)
+    const right = Math.min(state.width, safeArea.right - rect.left + padding)
+    const bottom = Math.min(state.height, safeArea.bottom - rect.top + padding)
+
+    if (right <= left || bottom <= top) return null
+    return { left, top, right, bottom }
+  }
+
+  function getSafeAreaEscapeDelta(bounds, safeRect, state) {
+    if (!safeRect || !rectsOverlap(bounds, safeRect)) return { dx: 0, dy: 0 }
+
+    const gap = 8
+    const options = [
+      { dx: (safeRect.left - gap) - bounds.right, dy: 0 },
+      { dx: (safeRect.right + gap) - bounds.left, dy: 0 },
+      { dx: 0, dy: (safeRect.top - gap) - bounds.bottom },
+      { dx: 0, dy: (safeRect.bottom + gap) - bounds.top },
+    ]
+
+    const feasible = options.filter(({ dx, dy }) => (
+      bounds.left + dx >= 4 &&
+      bounds.right + dx <= state.width - 4 &&
+      bounds.top + dy >= 4 &&
+      bounds.bottom + dy <= state.height - 4
+    ))
+
+    const candidates = feasible.length > 0 ? feasible : options
+    return candidates.reduce((best, option) => {
+      const distance = Math.abs(option.dx) + Math.abs(option.dy)
+      if (!best || distance < best.distance) return { ...option, distance }
+      return best
+    }, null)
+  }
+
+  function keepGroupOutOfSafeArea(state, groupId) {
+    const safeRect = getSafeAreaInCanvas(state)
+    if (!safeRect) return false
+
+    const members = groupPieces(state, groupId)
+    if (members.length === 0) return false
+
+    const bounds = getGroupBounds(members)
+    if (!rectsOverlap(bounds, safeRect)) return false
+
+    const escape = getSafeAreaEscapeDelta(bounds, safeRect, state)
+    if (!escape || (!escape.dx && !escape.dy)) return false
+
+    moveGroup(state, groupId, escape.dx, escape.dy, true)
+    return true
+  }
+
+  function normalizeLoosePiecesAroundSafeArea() {
+    const state = stateRef.current
+    if (!state?.board || draggingRef.current) return
+
+    const looseGroupIds = [...new Set(
+      state.pieces
+        .filter((piece) => piece.released && !piece.placed)
+        .map((piece) => piece.groupId)
+    )]
+
+    let changed = false
+    for (const groupId of looseGroupIds) {
+      changed = keepGroupOutOfSafeArea(state, groupId) || changed
+    }
+
+    if (changed) {
+      persistPuzzleState()
+      draw()
+    }
+  }
+
   function snapFeedback(state, members) {
     if (!members?.length) return
     if (navigator.vibrate) navigator.vibrate(22)
@@ -1208,6 +1329,9 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
     } while (groupId !== previous)
 
     tryPlaceGroupOnBoard(state, groupId)
+    if (!state.pieces.some((piece) => piece.groupId === groupId && piece.placed)) {
+      keepGroupOutOfSafeArea(state, groupId)
+    }
 
     const placedCount = state.pieces.filter((item) => item.placed).length
     const isFinalPlacement = placedCount === state.pieces.length
@@ -1343,6 +1467,7 @@ export default function App() {
   const [showSavedGamePrompt, setShowSavedGamePrompt] = useState(false)
   const [playerOpen, setPlayerOpen] = useState(false)
   const playerRef = useRef(null)
+  const [playerSafeArea, setPlayerSafeArea] = useState(null)
   const [trackVisible, setTrackVisible] = useState(true)
   const [endingStep, setEndingStep] = useState('idle')
   const [endingEnterDisabled, setEndingEnterDisabled] = useState(false)
@@ -1829,9 +1954,68 @@ export default function App() {
     startNewGameFromStartScreen()
   }
 
+  useEffect(() => {
+    if (screen !== 'game') {
+      setPlayerSafeArea(null)
+      return undefined
+    }
+
+    const shell = playerRef.current
+    if (!shell) {
+      setPlayerSafeArea(null)
+      return undefined
+    }
+
+    const measureSafeArea = () => {
+      if (window.innerWidth > 760) {
+        setPlayerSafeArea(null)
+        return
+      }
+
+      const logo = shell.querySelector('.muum-logo-btn')
+      const panel = playerOpen ? shell.querySelector('.muum-panel.visible') : null
+      const rects = [logo, panel]
+        .filter(Boolean)
+        .map((node) => node.getBoundingClientRect())
+        .filter((rect) => rect.width > 0 && rect.height > 0)
+
+      if (rects.length === 0) {
+        setPlayerSafeArea(null)
+        return
+      }
+
+      const left = Math.min(...rects.map((rect) => rect.left))
+      const top = Math.min(...rects.map((rect) => rect.top))
+      const right = Math.max(...rects.map((rect) => rect.right))
+      const bottom = Math.max(...rects.map((rect) => rect.bottom))
+      setPlayerSafeArea({ left, top, right, bottom, width: right - left, height: bottom - top })
+    }
+
+    const scheduleMeasure = () => window.requestAnimationFrame(measureSafeArea)
+    scheduleMeasure()
+
+    const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleMeasure) : null
+    if (resizeObserver) {
+      resizeObserver.observe(shell)
+      const logo = shell.querySelector('.muum-logo-btn')
+      const panel = shell.querySelector('.muum-panel')
+      if (logo) resizeObserver.observe(logo)
+      if (panel) resizeObserver.observe(panel)
+    }
+
+    window.addEventListener('resize', scheduleMeasure)
+    shell.addEventListener('transitionend', scheduleMeasure)
+
+    return () => {
+      window.removeEventListener('resize', scheduleMeasure)
+      shell.removeEventListener('transitionend', scheduleMeasure)
+      resizeObserver?.disconnect()
+    }
+  }, [screen, playerOpen])
+
   let content
   if (screen === 'game') {
-    content = <Puzzle key={gameSession} piecesCount={count} onComplete={complete} onExit={() => setScreen('start')} />
+    content = <Puzzle key={gameSession} piecesCount={count} onComplete={complete} onExit={() => setScreen('start')} safeArea={playerSafeArea} />
   } else if (screen === 'complete') {
     content = (
       <main className="complete-screen">
