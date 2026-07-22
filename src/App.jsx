@@ -165,12 +165,8 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
     mode: 'idle',
     pointerId: null,
     pointerType: null,
-    startX: 0,
-    startY: 0,
-    candidateGroupId: null,
+    activeGroupId: null,
   })
-
-  const TOUCH_DRAG_THRESHOLD = 10
 
   function persistPuzzleState() {
     const state = stateRef.current
@@ -993,7 +989,7 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
 
       const groupSize = groupSizes.get(piece.groupId) || 1
       const topness = index / Math.max(1, state.pieces.length)
-      const score = (isPathHit ? 1000 : 0) - (groupSize * 8) - distance + topness
+      const score = (isPathHit ? 100000 : 0) - (distance * 10) - (groupSize * 4) + topness
       if (score > bestScore) {
         bestScore = score
         bestPiece = piece
@@ -1008,9 +1004,7 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
       mode: 'idle',
       pointerId: null,
       pointerType: null,
-      startX: 0,
-      startY: 0,
-      candidateGroupId: null,
+      activeGroupId: null,
     }
   }
 
@@ -1135,40 +1129,30 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
 
   function handlePointerDown(event) {
     if (intro) return
+
+    const input = inputStateRef.current
+    if (input.mode === 'dragging' && input.pointerId !== event.pointerId) {
+      return
+    }
+
+    if (event.pointerType === 'touch' && event.isPrimary === false) {
+      return
+    }
+
     const state = stateRef.current
     const point = pointerPosition(event)
     const piece = choosePieceForPointer(state, point, event.pointerType)
     if (!piece) {
-      resetInputState()
       return
     }
 
-    if (event.pointerType !== 'touch') {
-      event.preventDefault()
-      startDragForGroup(state, event.pointerId, piece.groupId, point, event.pointerType)
-      inputStateRef.current = {
-        mode: 'dragging',
-        pointerId: event.pointerId,
-        pointerType: event.pointerType,
-        startX: point.x,
-        startY: point.y,
-        candidateGroupId: piece.groupId,
-      }
-      return
-    }
-
-    const input = inputStateRef.current
-    if (input.pointerId != null && input.pointerId !== event.pointerId && input.mode !== 'idle') {
-      return
-    }
-
+    event.preventDefault()
+    startDragForGroup(state, event.pointerId, piece.groupId, point, event.pointerType)
     inputStateRef.current = {
-      mode: 'pending',
+      mode: 'dragging',
       pointerId: event.pointerId,
       pointerType: event.pointerType,
-      startX: point.x,
-      startY: point.y,
-      candidateGroupId: piece.groupId,
+      activeGroupId: piece.groupId,
     }
   }
 
@@ -1177,34 +1161,6 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
     const input = inputStateRef.current
 
     if (input.pointerId != null && input.pointerId !== event.pointerId) return
-
-    if (input.pointerType === 'touch' && input.mode === 'pending') {
-      const point = pointerPosition(event)
-      const dx = point.x - input.startX
-      const dy = point.y - input.startY
-      const absX = Math.abs(dx)
-      const absY = Math.abs(dy)
-      if (absX < TOUCH_DRAG_THRESHOLD && absY < TOUCH_DRAG_THRESHOLD) return
-
-      if (absY > absX * 1.15) {
-        inputStateRef.current = {
-          ...input,
-          mode: 'scrolling',
-          candidateGroupId: null,
-        }
-        return
-      }
-
-      if (input.candidateGroupId != null) {
-        event.preventDefault()
-        startDragForGroup(state, event.pointerId, input.candidateGroupId, point, 'touch')
-        inputStateRef.current = {
-          ...input,
-          mode: 'dragging',
-        }
-      }
-      return
-    }
 
     if (!state.drag || input.mode !== 'dragging') return
     event.preventDefault()
@@ -1221,9 +1177,7 @@ function Puzzle({ piecesCount, onComplete, onExit }) {
 
     const state = stateRef.current
     if (!state.drag || input.mode !== 'dragging') {
-      if (input.mode === 'pending' || input.mode === 'scrolling') {
-        resetInputState()
-      }
+      resetInputState()
       return
     }
 
