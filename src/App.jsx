@@ -47,15 +47,66 @@ function clearSavedPuzzleState() {
   } catch (error) {}
 }
 
-function hasRestorablePuzzleState(expectedPiecesCount) {
+function readSavedPuzzleState() {
   try {
     const raw = localStorage.getItem(PUZZLE_STATE_STORAGE_KEY)
-    if (!raw) return false
+    if (!raw) return null
     const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object') return false
-    if (parsed.version !== 1) return false
-    if (parsed.piecesCount !== expectedPiecesCount) return false
-    if (!Array.isArray(parsed.pieces) || parsed.pieces.length !== expectedPiecesCount) return false
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch (error) {
+    return null
+  }
+}
+
+function countPlacedPiecesInSave(parsed) {
+  if (!Array.isArray(parsed?.pieces)) return 0
+  return parsed.pieces.reduce((count, piece) => count + (piece?.placed ? 1 : 0), 0)
+}
+
+function isCompletedPuzzleState(parsed, expectedPiecesCount = null) {
+  if (!parsed || typeof parsed !== 'object') return false
+
+  const explicitComplete = parsed.status === 'completed' || parsed.completed === true || Number.isFinite(parsed.completedAt)
+  const endingComplete = typeof parsed.endingStep === 'string' && parsed.endingStep !== 'idle'
+  const placedCount = Number.isFinite(parsed.placedCount) ? parsed.placedCount : countPlacedPiecesInSave(parsed)
+  const totalPieces = Number.isFinite(expectedPiecesCount)
+    ? expectedPiecesCount
+    : (Number.isFinite(parsed.piecesCount) ? parsed.piecesCount : Array.isArray(parsed.pieces) ? parsed.pieces.length : 0)
+  const allPiecesPlaced = totalPieces > 0 && placedCount >= totalPieces
+
+  return explicitComplete || endingComplete || allPiecesPlaced
+}
+
+function isValidPuzzleStateShape(parsed, expectedPiecesCount = null) {
+  if (!parsed || typeof parsed !== 'object') return false
+  if (![1, 2].includes(parsed.version)) return false
+  if (!Number.isFinite(parsed.piecesCount)) return false
+  if (expectedPiecesCount != null && parsed.piecesCount !== expectedPiecesCount) return false
+  if (!Array.isArray(parsed.pieces) || parsed.pieces.length !== parsed.piecesCount) return false
+  if (!Number.isFinite(parsed.rows) || !Number.isFinite(parsed.cols)) return false
+
+  const seen = new Set()
+  for (const piece of parsed.pieces) {
+    if (!piece || typeof piece !== 'object') return false
+    if (!Number.isInteger(piece.index) || piece.index < 0 || piece.index >= parsed.piecesCount) return false
+    if (seen.has(piece.index)) return false
+    seen.add(piece.index)
+  }
+
+  return true
+}
+
+function hasRestorablePuzzleState(expectedPiecesCount) {
+  const parsed = readSavedPuzzleState()
+  if (!parsed) return false
+  if (!isValidPuzzleStateShape(parsed, expectedPiecesCount)) {
+    clearSavedPuzzleState()
+    return false
+  }
+  if (isCompletedPuzzleState(parsed, expectedPiecesCount)) {
+    return false
+  }
+  try {
     return true
   } catch (error) {
     return false
@@ -169,17 +220,20 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
     activeGroupId: null,
   })
 
-  function persistPuzzleState() {
+  function persistPuzzleState(overrides = {}) {
     const state = stateRef.current
     if (!state?.board || !Array.isArray(state.pieces) || state.pieces.length !== piecesCount) return
 
     const snapshot = {
-      version: 1,
+      version: 2,
       piecesCount,
       rows: state.rows,
       cols: state.cols,
       width: state.width,
       height: state.height,
+      elapsed: elapsedRef.current,
+      placedCount: state.pieces.filter((piece) => piece.placed).length,
+      status: 'active',
       pieces: state.pieces.map((piece) => ({
         index: piece.index,
         x: piece.x,
@@ -188,6 +242,7 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
         placed: !!piece.placed,
         groupId: piece.groupId,
       })),
+      ...overrides,
     }
 
     try {
@@ -196,18 +251,15 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
   }
 
   function restorePuzzleStateInto(state) {
-    let parsed
-    try {
-      const raw = localStorage.getItem(PUZZLE_STATE_STORAGE_KEY)
-      if (!raw) return false
-      parsed = JSON.parse(raw)
-    } catch (error) {
+    const parsed = readSavedPuzzleState()
+    if (!isValidPuzzleStateShape(parsed, piecesCount)) {
+      clearSavedPuzzleState()
       return false
     }
-
-    if (!parsed || typeof parsed !== 'object') return false
-    if (parsed.version !== 1) return false
-    if (parsed.piecesCount !== piecesCount) return false
+    if (isCompletedPuzzleState(parsed, piecesCount)) {
+      clearSavedPuzzleState()
+      return false
+    }
     if (parsed.rows !== state.rows || parsed.cols !== state.cols) return false
     if (!Array.isArray(parsed.pieces) || parsed.pieces.length !== state.pieces.length) return false
 
@@ -738,6 +790,12 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
   function triggerCompletion({ isTest = false } = {}) {
     if (completionActiveRef.current) return
     completionActiveRef.current = true
+    persistPuzzleState({
+      status: 'completed',
+      completed: true,
+      completedAt: Date.now(),
+      placedCount: stateRef.current.pieces.length,
+    })
     setCompleting(true)
     setShowCompletionScale(true)
     setShowConfetti(false)
@@ -1938,6 +1996,10 @@ export default function App() {
   }
 
   const continueSavedGameFromStartScreen = () => {
+    if (!hasRestorablePuzzleState(count)) {
+      startNewGameFromStartScreen()
+      return
+    }
     endingRunTokenRef.current += 1
     resetEndingState()
     setShowSavedGamePrompt(false)
@@ -2023,24 +2085,28 @@ export default function App() {
           {Array.from({ length: 42 }, (_, index) => <i key={index} style={{ '--i': index }} />)}
         </div>
         <div className="complete-card">
-          <p className="complete-kicker">MISSION COMPLETE</p>
-          <div className="complete-image-wrap">
+          <div className="complete-hero">
+            <p className="complete-kicker">MISSION COMPLETE</p>
+            <p className="complete-subtitle">야생의 뮤움을 발견했다!</p>
+          </div>
+          <div className="complete-image-wrap complete-media">
             <img src={IMG} alt="완성된 비밀 사진" />
             <span className="sparkle sparkle-one">✦</span>
             <span className="sparkle sparkle-two">✧</span>
             <span className="sparkle sparkle-three">✦</span>
           </div>
-          <p className="complete-subtitle">야생의 뮤움을 발견했다!</p>
+          <div className="complete-summary">
+            <p className="record-label">완성 기록</p>
+            <strong className="record-time">{fmt(record)}</strong>
+            <div className="nickname-row">
+              <input value={name} onChange={(event) => setName(event.target.value)} maxLength={12} placeholder="닉네임" />
+              <button type="button" onClick={save}>랭킹 등록</button>
+            </div>
+          </div>
           <div className="complete-actions">
             <button type="button" className="replay-button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); clearSavedPuzzleState(); setGameSession((value) => value + 1); setName(''); setScreen('game') }}>PLAY AGAIN</button>
             <button type="button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); setScreen('start') }}>메인으로</button>
             <button type="button" className="hidden-ending-trigger" onClick={triggerEndingSequence}>...</button>
-          </div>
-          <p className="record-label">완성 기록</p>
-          <strong className="record-time">{fmt(record)}</strong>
-          <div className="nickname-row">
-            <input value={name} onChange={(event) => setName(event.target.value)} maxLength={12} placeholder="닉네임" />
-            <button type="button" onClick={save}>랭킹 등록</button>
           </div>
         </div>
       </main>
