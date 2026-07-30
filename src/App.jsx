@@ -1633,7 +1633,9 @@ export default function App() {
   const [count] = useState(PUZZLE_PIECES)
   const [record, setRecord] = useState(0)
   const [name, setName] = useState('')
-  const [ranking, setRanking] = useState(() => JSON.parse(localStorage.getItem('muum-ranking') || '[]'))
+  const [ranking, setRanking] = useState([])
+  const [rankingLoading, setRankingLoading] = useState(false)
+  const [rankingError, setRankingError] = useState('')
   const audioRef = useRef(null)
   const queueRef = useRef([])
   const queuePositionRef = useRef(0)
@@ -1670,6 +1672,64 @@ export default function App() {
     if (!nickname || !Number.isFinite(timeValue)) return null
     const index = ranking.findIndex((item) => item.name === nickname && item.time === timeValue)
     return index >= 0 ? index + 1 : null
+  }
+
+  const fetchRankings = async ({ signal } = {}) => {
+    setRankingLoading(true)
+    setRankingError('')
+
+    try {
+      const response = await fetch('/api/rankings', {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json'
+        },
+        signal,
+      })
+
+      if (!response.ok) {
+        let body = ''
+        try {
+          body = await response.text()
+        } catch (error) {}
+        throw new Error(`GET /api/rankings failed (${response.status}) ${body}`)
+      }
+
+      const payload = await response.json()
+      const list = Array.isArray(payload?.rankings) ? payload.rankings : []
+      const normalized = list
+        .map((item, index) => {
+          const clearTimeMs = Number.isFinite(item?.clear_time_ms)
+            ? item.clear_time_ms
+            : Number.isFinite(item?.clearTimeMs)
+              ? item.clearTimeMs
+              : null
+          const time = Number.isFinite(clearTimeMs) ? Math.max(0, Math.round(clearTimeMs / 1000)) : null
+          const name = typeof item?.nickname === 'string'
+            ? item.nickname.trim()
+            : typeof item?.name === 'string'
+              ? item.name.trim()
+              : ''
+
+          if (!name || !Number.isFinite(time)) return null
+
+          return {
+            id: item?.id ?? `${name}-${time}-${index}`,
+            name,
+            time,
+          }
+        })
+        .filter(Boolean)
+
+      setRanking(normalized)
+    } catch (error) {
+      if (error?.name === 'AbortError') return
+      console.error('[ranking] GET /api/rankings error', error)
+      setRanking([])
+      setRankingError('랭킹을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.')
+    } finally {
+      setRankingLoading(false)
+    }
   }
 
   const clearEndingTimers = () => {
@@ -1934,6 +1994,17 @@ export default function App() {
     }
   }, [screen])
 
+  useEffect(() => {
+    if (screen !== 'ranking') return undefined
+
+    const controller = new AbortController()
+    void fetchRankings({ signal: controller.signal })
+
+    return () => {
+      controller.abort()
+    }
+  }, [screen])
+
   const loadTrack = (trackIndex, shouldPlay = true, recordHistory = true) => {
     const audio = audioRef.current
     if (!audio) return
@@ -2138,8 +2209,6 @@ export default function App() {
       secretPhotoVisible: true,
     })
 
-    setRanking(next)
-    localStorage.setItem('muum-ranking', JSON.stringify(next))
     const clearTimeMs = Math.max(0, Math.round(record * 1000))
     void fetch('/api/rankings', {
       method: 'POST',
@@ -2338,8 +2407,11 @@ export default function App() {
       <main className="ranking-screen">
         <div className="ranking-card">
           <h1>RANKING</h1>
-          {ranking.map((item, index) => (
-            <div className="rank" key={`${item.name}-${item.time}-${index}`}>
+          {rankingLoading && <p role="status" aria-live="polite">랭킹 불러오는 중...</p>}
+          {!rankingLoading && rankingError && <p role="alert">{rankingError}</p>}
+          {!rankingLoading && !rankingError && ranking.length === 0 && <p>아직 등록된 랭킹이 없습니다.</p>}
+          {!rankingLoading && !rankingError && ranking.map((item, index) => (
+            <div className="rank" key={item.id ?? `${item.name}-${item.time}-${index}`}>
               <b>{index + 1}</b>
               <span>{item.name}</span>
               <em>{fmt(item.time)}</em>
