@@ -213,10 +213,10 @@
 .teaser-overlay.is-navy-ending .teaser-final-block{padding-bottom:132px}
 .teaser-line{margin:0;color:#f0f0f0;opacity:0;animation:teaserLineUp .8s cubic-bezier(.2,.85,.24,1) forwards}
 .teaser-overlay.is-navy-ending .teaser-line{color:#ebe6da}
-.teaser-coming{font-size:clamp(1.3rem,3.7vw,2.2rem);font-weight:700;letter-spacing:.04em;color:#ebe6da;animation-duration:1.5s}
-.teaser-title{font-size:clamp(2rem,6vw,4rem);font-weight:800;letter-spacing:.02em;color:#f3efe3;animation-duration:1.2s}
-.teaser-handle{font-size:clamp(.95rem,2.1vw,1.3rem);font-weight:500;letter-spacing:.09em;color:#ddd8cc;animation-duration:1s}
-.teaser-home-button{position:fixed;left:50%;bottom:7vh;transform:translateX(-50%);border:1px solid #ffffff55;border-radius:999px;background:#111827cc;color:#fff;padding:11px 18px;cursor:pointer;min-width:160px;animation:teaserFadeIn .8s ease both;z-index:3}
+.teaser-coming{font-size:clamp(1.3rem,3.7vw,2.2rem);font-weight:700;letter-spacing:.04em;color:#ebe6da;animation-duration:.4s}
+.teaser-title{font-size:clamp(2rem,6vw,4rem);font-weight:800;letter-spacing:.02em;color:#f3efe3;animation-duration:.4s}
+.teaser-handle{font-size:clamp(.95rem,2.1vw,1.3rem);font-weight:500;letter-spacing:.09em;color:#ddd8cc;animation-duration:.4s}
+.teaser-home-button{position:fixed;left:50%;bottom:7vh;transform:translateX(-50%);border:1px solid #ffffff55;border-radius:999px;background:#111827cc;color:#fff;padding:11px 18px;cursor:pointer;min-width:160px;animation:teaserFadeIn .4s ease both;z-index:3}
 .teaser-home-button:disabled{opacity:.5;cursor:default}
 @keyframes teaserFadeIn{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:translateY(0)}}
 @keyframes teaserSlowFadeIn{0%{opacity:0}100%{opacity:1}}

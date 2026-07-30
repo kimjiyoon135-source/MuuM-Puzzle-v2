@@ -2436,7 +2436,7 @@ export default function App() {
               <button type="button" className="start-button" onClick={continueSavedGameFromStartScreen}>CONTINUE</button>
             )}
             <button type="button" className="start-button" onClick={startNewGameFromStartScreen}>NEW GAME</button>
-            <button type="button" className="text-button" onClick={() => setScreen('ranking')}>RANKING</button>
+            <button type="button" className="start-button" onClick={() => setScreen('ranking')}>RANKING</button>
           </div>
           {hasSecretPhotoUnlocked() && (
             <div className="hidden-secret-section" aria-label="Secret Photo Section">
