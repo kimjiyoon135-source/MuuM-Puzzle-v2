@@ -2360,44 +2360,46 @@ export default function App() {
           {Array.from({ length: 42 }, (_, index) => <i key={index} style={{ '--i': index }} />)}
         </div>
         <div className="complete-card">
-          <div className="complete-hero">
-            <p className="complete-kicker">MISSION COMPLETE</p>
-            <p className="complete-subtitle">야생의 뮤움을 발견했다!</p>
-          </div>
-          <div className="complete-image-wrap complete-media">
-            <img src={IMG} alt="완성된 비밀 사진" />
-            <span className="sparkle sparkle-one">✦</span>
-            <span className="sparkle sparkle-two">✧</span>
-            <span className="sparkle sparkle-three">✦</span>
-          </div>
-          <div className="complete-summary">
-            <p className="record-label">완성 기록</p>
-            <strong className="record-time">{fmt(record)}</strong>
-            {!isPhotoView ? (
-              <div className="nickname-row">
-                <input value={name} onChange={(event) => setName(event.target.value)} maxLength={12} placeholder="닉네임" />
-                <button type="button" onClick={save}>랭킹 등록</button>
-              </div>
-            ) : (
-              <div className="photo-meta" role="status" aria-live="polite">
-                <p>완료 닉네임: {photoName}</p>
-                <p>{rankingPosition ? `랭킹 ${rankingPosition}위` : '랭킹 정보 없음'}</p>
-              </div>
-            )}
-          </div>
-          <div className="complete-actions">
-            {!isPhotoView ? (
-              <>
-                <button type="button" className="replay-button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); clearProgressSave(); setGameStartMode('new'); setGameSession((value) => value + 1); setName(''); refreshSaveIndicators(); setScreen('game') }}>PLAY AGAIN</button>
-                <button type="button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); setScreen('start') }}>메인으로</button>
-                <button type="button" className="hidden-ending-trigger" onClick={triggerEndingSequence}>...</button>
-              </>
-            ) : (
-              <>
-                <button type="button" className="replay-button" onClick={triggerEndingSequence}>ENDING 다시 보기</button>
-                <button type="button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); setScreen('start') }}>메인으로</button>
-              </>
-            )}
+          <div className="complete-axis">
+            <div className="complete-hero">
+              <p className="complete-kicker">MISSION COMPLETE</p>
+              <p className="complete-subtitle">야생의 뮤움을 발견했다!</p>
+            </div>
+            <div className="complete-image-wrap complete-media">
+              <img src={IMG} alt="완성된 비밀 사진" />
+              <span className="sparkle sparkle-one">✦</span>
+              <span className="sparkle sparkle-two">✧</span>
+              <span className="sparkle sparkle-three">✦</span>
+            </div>
+            <div className="complete-summary">
+              <p className="record-label">완성 기록</p>
+              <strong className="record-time">{fmt(record)}</strong>
+              {!isPhotoView ? (
+                <div className="nickname-row">
+                  <input value={name} onChange={(event) => setName(event.target.value)} maxLength={12} placeholder="닉네임" />
+                  <button type="button" onClick={save}>랭킹 등록</button>
+                </div>
+              ) : (
+                <div className="photo-meta" role="status" aria-live="polite">
+                  <p>완료 닉네임: {photoName}</p>
+                  <p>{rankingPosition ? `랭킹 ${rankingPosition}위` : '랭킹 정보 없음'}</p>
+                </div>
+              )}
+            </div>
+            <div className="complete-actions">
+              {!isPhotoView ? (
+                <>
+                  <button type="button" className="replay-button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); clearProgressSave(); setGameStartMode('new'); setGameSession((value) => value + 1); setName(''); refreshSaveIndicators(); setScreen('game') }}>PLAY AGAIN</button>
+                  <button type="button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); setScreen('start') }}>메인으로</button>
+                  <button type="button" className="hidden-ending-trigger" onClick={triggerEndingSequence}>...</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="replay-button" onClick={triggerEndingSequence}>ENDING 다시 보기</button>
+                  <button type="button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); setScreen('start') }}>메인으로</button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </main>
