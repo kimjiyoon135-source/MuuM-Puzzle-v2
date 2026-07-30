@@ -1913,19 +1913,19 @@ export default function App() {
     scheduleEnding(() => {
       if (token !== endingRunTokenRef.current) return
       setEndingStep('final-coming')
-    }, 7400)
+    }, 6700)
 
-    // Coming Soon fade-in 1.5s + 1.2s hold
+    // Coming Soon appears 0.3s after the first line trigger.
     scheduleEnding(() => {
       if (token !== endingRunTokenRef.current) return
       setEndingStep('final-title')
-    }, 10100)
+    }, 7000)
 
-    // Mu:uM Escape Game fade-in 1.2s + 1.0s hold
+    // Mu:uM Escape Game appears 0.3s after the second line trigger.
     scheduleEnding(() => {
       if (token !== endingRunTokenRef.current) return
       setEndingStep('final-handle')
-    }, 12300)
+    }, 7300)
 
     // @band fade-in 1.0s + 1.5s hold
     scheduleEnding(() => {
