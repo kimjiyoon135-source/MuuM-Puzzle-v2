@@ -1103,9 +1103,22 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
   function pointerPosition(event) {
     const canvas = canvasRef.current
     if (!canvas) return { x: 0, y: 0 }
+
     const rect = canvas.getBoundingClientRect()
-    const x = event.offsetX != null ? event.offsetX : event.clientX - rect.left
-    const y = event.offsetY != null ? event.offsetY : event.clientY - rect.top
+    if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 }
+
+    // Convert viewport pointer coordinates into canvas internal pixel coordinates.
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    const canvasX = (event.clientX - rect.left) * scaleX
+    const canvasY = (event.clientY - rect.top) * scaleY
+
+    // Normalize internal pixels back to the puzzle's logical coordinate space.
+    const state = stateRef.current
+    const logicalScaleX = state?.width ? (canvas.width / state.width) : 1
+    const logicalScaleY = state?.height ? (canvas.height / state.height) : 1
+    const x = canvasX / logicalScaleX
+    const y = canvasY / logicalScaleY
     return { x, y }
   }
 
