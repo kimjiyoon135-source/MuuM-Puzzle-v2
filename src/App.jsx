@@ -1927,11 +1927,11 @@ export default function App() {
       setEndingStep('final-handle')
     }, 7300)
 
-    // @band fade-in 1.0s + 1.5s hold
+    // Home button appears 0.3s after @band line.
     scheduleEnding(() => {
       if (token !== endingRunTokenRef.current) return
       setEndingStep('final-home')
-    }, 14800)
+    }, 7600)
   }
 
   const exitHiddenEndingToStart = () => {
