@@ -277,7 +277,7 @@ function addPiecePath(ctx, x, y, w, h, edges) {
   ctx.closePath()
 }
 
-function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
+function Puzzle({ piecesCount, onComplete, onExit, safeArea, startMode = 'new' }) {
   const canvasRef = useRef(null)
   const wrapRef = useRef(null)
   const imageRef = useRef(null)
@@ -607,6 +607,14 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
     const image = imageRef.current
     if (!canvas || !wrap || !image) return
 
+    const activePointerId = inputStateRef.current.pointerId
+    if (activePointerId != null && canvas.hasPointerCapture?.(activePointerId)) {
+      canvas.releasePointerCapture(activePointerId)
+    }
+    resetInputState()
+    setDragging(false)
+    stateRef.current.drag = null
+
     elapsedRef.current = 0
     setElapsed(0)
 
@@ -683,7 +691,8 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
       completionStarted: null,
     }
 
-    const restored = restorePuzzleStateInto(stateRef.current)
+    const shouldRestoreFromSave = startMode === 'continue'
+    const restored = shouldRestoreFromSave ? restorePuzzleStateInto(stateRef.current) : false
     const placedCount = stateRef.current.pieces.filter((piece) => piece.placed).length
     const releasedCount = stateRef.current.pieces.filter((piece) => piece.released).length
     if (!restored) {
@@ -1132,6 +1141,7 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
     ) return false
 
     ctx.save()
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.beginPath()
     addPiecePath(ctx, piece.x, piece.y, piece.w, piece.h, piece.edges)
     const isPathHit = ctx.isPointInPath(point.x, point.y)
@@ -1181,6 +1191,7 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea }) {
       ) continue
 
       ctx.save()
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
       ctx.beginPath()
       addPiecePath(ctx, piece.x, piece.y, piece.w, piece.h, piece.edges)
       const isPathHit = ctx.isPointInPath(point.x, point.y)
@@ -1633,6 +1644,7 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [muted, setMuted] = useState(false)
   const [gameSession, setGameSession] = useState(0)
+  const [gameStartMode, setGameStartMode] = useState('new')
   const [hasProgressSave, setHasProgressSave] = useState(() => hasRestorableProgressSave(PUZZLE_PIECES))
   const [completeSave, setCompleteSave] = useState(() => readCompleteSave())
   const [playerOpen, setPlayerOpen] = useState(false)
@@ -2171,6 +2183,7 @@ export default function App() {
     resetEndingState()
     setRecord(0)
     setName('')
+    setGameStartMode('new')
     setGameSession((value) => value + 1)
     refreshSaveIndicators()
     ensureMusicForGame()
@@ -2185,6 +2198,7 @@ export default function App() {
     }
     endingRunTokenRef.current += 1
     resetEndingState()
+    setGameStartMode('continue')
     setGameSession((value) => value + 1)
     ensureMusicForGame()
     setScreen('game')
@@ -2266,7 +2280,7 @@ export default function App() {
 
   let content
   if (screen === 'game') {
-    content = <Puzzle key={gameSession} piecesCount={count} onComplete={complete} onExit={() => setScreen('start')} safeArea={playerSafeArea} />
+    content = <Puzzle key={gameSession} piecesCount={count} onComplete={complete} onExit={() => setScreen('start')} safeArea={playerSafeArea} startMode={gameStartMode} />
   } else if (screen === 'complete' || screen === 'photo') {
     const isPhotoView = screen === 'photo'
     const photoName = completeSave?.completedNickname?.trim() || '-'
@@ -2305,7 +2319,7 @@ export default function App() {
           <div className="complete-actions">
             {!isPhotoView ? (
               <>
-                <button type="button" className="replay-button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); clearProgressSave(); setGameSession((value) => value + 1); setName(''); refreshSaveIndicators(); setScreen('game') }}>PLAY AGAIN</button>
+                <button type="button" className="replay-button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); clearProgressSave(); setGameStartMode('new'); setGameSession((value) => value + 1); setName(''); refreshSaveIndicators(); setScreen('game') }}>PLAY AGAIN</button>
                 <button type="button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); setScreen('start') }}>메인으로</button>
                 <button type="button" className="hidden-ending-trigger" onClick={triggerEndingSequence}>...</button>
               </>
