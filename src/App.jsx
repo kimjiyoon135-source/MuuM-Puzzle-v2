@@ -311,7 +311,7 @@ function addPiecePath(ctx, x, y, w, h, edges) {
   ctx.closePath()
 }
 
-function Puzzle({ piecesCount, onComplete, onExit, safeArea, startMode = 'new' }) {
+function Puzzle({ piecesCount, onComplete, onExit, safeArea, startMode = 'new', cameraSoundRef, revealSoundRef }) {
   const canvasRef = useRef(null)
   const wrapRef = useRef(null)
   const imageRef = useRef(null)
@@ -330,8 +330,6 @@ function Puzzle({ piecesCount, onComplete, onExit, safeArea, startMode = 'new' }
   const completionTimersRef = useRef({ camera: null, scale: null, reveal: null, confettiStart: null, confettiEnd: null, finish: null })
   const [lastRevealPlaying, setLastRevealPlaying] = useState(false)
   const isLastRevealPlayingRef = useRef(false)
-  const cameraSoundRef = useRef(null)
-  const revealSoundRef = useRef(null)
   const pieceFitSoundRef = useRef(null)
   const pieceFitPoolRef = useRef([])
   const pieceSpawnSoundRef = useRef(null)
@@ -1702,6 +1700,8 @@ export default function App() {
   const endingTimersRef = useRef([])
   const endingFadeRafRef = useRef(null)
   const endingRunTokenRef = useRef(0)
+  const cameraSoundRef = useRef(null)
+  const revealSoundRef = useRef(null)
   const doorOpenSoundRef = useRef(null)
   const footStepSoundRef = useRef(null)
   const endingEnterLockedRef = useRef(false)
@@ -1709,6 +1709,14 @@ export default function App() {
   const refreshSaveIndicators = () => {
     setHasProgressSave(hasRestorableProgressSave(count))
     setCompleteSave(readCompleteSave())
+  }
+
+  const playAudioRef = (audioRef) => {
+    const audio = audioRef?.current
+    if (!audio) return
+    audio.currentTime = 0
+    const promise = audio.play()
+    if (promise?.catch) promise.catch(() => {})
   }
 
   const fetchRankings = async ({ signal } = {}) => {
@@ -1971,10 +1979,16 @@ export default function App() {
   useEffect(() => {
     const doorAudio = new Audio(DOOR_OPEN_SFX)
     const footAudio = new Audio(FOOT_STEP_SFX)
+    const cameraAudio = new Audio('/sounds/camera.mp3')
+    const revealAudio = new Audio('/sounds/reveal.mp3')
     doorAudio.preload = 'auto'
     footAudio.preload = 'auto'
+    cameraAudio.preload = 'auto'
+    revealAudio.preload = 'auto'
     doorOpenSoundRef.current = doorAudio
     footStepSoundRef.current = footAudio
+    cameraSoundRef.current = cameraAudio
+    revealSoundRef.current = revealAudio
     return () => {
       if (doorOpenSoundRef.current) {
         doorOpenSoundRef.current.pause()
@@ -1983,6 +1997,14 @@ export default function App() {
       if (footStepSoundRef.current) {
         footStepSoundRef.current.pause()
         footStepSoundRef.current.currentTime = 0
+      }
+      if (cameraSoundRef.current) {
+        cameraSoundRef.current.pause()
+        cameraSoundRef.current.currentTime = 0
+      }
+      if (revealSoundRef.current) {
+        revealSoundRef.current.pause()
+        revealSoundRef.current.currentTime = 0
       }
       resetEndingState()
     }
@@ -2347,6 +2369,12 @@ export default function App() {
     resetEndingState()
     setPhotoEntryMode('secret')
     setScreen('photo')
+    window.setTimeout(() => {
+      playAudioRef(cameraSoundRef)
+      window.setTimeout(() => {
+        playAudioRef(revealSoundRef)
+      }, 250)
+    }, 0)
   }
 
   useEffect(() => {
@@ -2410,7 +2438,7 @@ export default function App() {
 
   let content
   if (screen === 'game') {
-    content = <Puzzle key={gameSession} piecesCount={count} onComplete={complete} onExit={() => setScreen('start')} safeArea={playerSafeArea} startMode={gameStartMode} />
+    content = <Puzzle key={gameSession} piecesCount={count} onComplete={complete} onExit={() => setScreen('start')} safeArea={playerSafeArea} startMode={gameStartMode} cameraSoundRef={cameraSoundRef} revealSoundRef={revealSoundRef} />
   } else if (screen === 'complete' || screen === 'photo') {
     const isPhotoView = screen === 'photo'
     const photoName = completeSave?.completedNickname?.trim() || '-'
