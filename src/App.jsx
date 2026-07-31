@@ -47,6 +47,40 @@ function fmt(sec) {
   return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`
 }
 
+function normalizeRankingList(list) {
+  if (!Array.isArray(list)) return []
+
+  return list
+    .map((item, index) => {
+      const clearTimeMs = Number.isFinite(item?.clear_time_ms)
+        ? item.clear_time_ms
+        : Number.isFinite(item?.clearTimeMs)
+          ? item.clearTimeMs
+          : null
+      const time = Number.isFinite(clearTimeMs) ? Math.max(0, Math.round(clearTimeMs / 1000)) : null
+      const name = typeof item?.nickname === 'string'
+        ? item.nickname.trim()
+        : typeof item?.name === 'string'
+          ? item.name.trim()
+          : ''
+      const position = Number.isFinite(item?.position)
+        ? item.position
+        : Number.isFinite(item?.rank)
+          ? item.rank
+          : index + 1
+
+      if (!name || !Number.isFinite(time)) return null
+
+      return {
+        id: item?.id ?? `${name}-${time}-${position}-${index}`,
+        name,
+        time,
+        position,
+      }
+    })
+    .filter(Boolean)
+}
+
 function readStorageJSON(storageKey) {
   try {
     const raw = localStorage.getItem(storageKey)
@@ -1636,6 +1670,14 @@ export default function App() {
   const [ranking, setRanking] = useState([])
   const [rankingLoading, setRankingLoading] = useState(false)
   const [rankingError, setRankingError] = useState('')
+  const [rankingSubmission, setRankingSubmission] = useState({
+    status: 'idle',
+    error: '',
+    nickname: '',
+    position: null,
+    result: '',
+    clearTimeMs: null,
+  })
   const audioRef = useRef(null)
   const queueRef = useRef([])
   const queuePositionRef = useRef(0)
@@ -1653,6 +1695,7 @@ export default function App() {
   const playerRef = useRef(null)
   const [playerSafeArea, setPlayerSafeArea] = useState(null)
   const [trackVisible, setTrackVisible] = useState(true)
+  const [photoEntryMode, setPhotoEntryMode] = useState('ending')
   const [endingStep, setEndingStep] = useState('idle')
   const [endingEnterDisabled, setEndingEnterDisabled] = useState(false)
   const [endingHomeDisabled, setEndingHomeDisabled] = useState(false)
@@ -1666,12 +1709,6 @@ export default function App() {
   const refreshSaveIndicators = () => {
     setHasProgressSave(hasRestorableProgressSave(count))
     setCompleteSave(readCompleteSave())
-  }
-
-  const getRankingPosition = (nickname, timeValue) => {
-    if (!nickname || !Number.isFinite(timeValue)) return null
-    const index = ranking.findIndex((item) => item.name === nickname && item.time === timeValue)
-    return index >= 0 ? index + 1 : null
   }
 
   const fetchRankings = async ({ signal } = {}) => {
@@ -1696,32 +1733,7 @@ export default function App() {
       }
 
       const payload = await response.json()
-      const list = Array.isArray(payload?.rankings) ? payload.rankings : []
-      const normalized = list
-        .map((item, index) => {
-          const clearTimeMs = Number.isFinite(item?.clear_time_ms)
-            ? item.clear_time_ms
-            : Number.isFinite(item?.clearTimeMs)
-              ? item.clearTimeMs
-              : null
-          const time = Number.isFinite(clearTimeMs) ? Math.max(0, Math.round(clearTimeMs / 1000)) : null
-          const name = typeof item?.nickname === 'string'
-            ? item.nickname.trim()
-            : typeof item?.name === 'string'
-              ? item.name.trim()
-              : ''
-
-          if (!name || !Number.isFinite(time)) return null
-
-          return {
-            id: item?.id ?? `${name}-${time}-${index}`,
-            name,
-            time,
-          }
-        })
-        .filter(Boolean)
-
-      setRanking(normalized)
+      setRanking(normalizeRankingList(payload?.rankings))
     } catch (error) {
       if (error?.name === 'AbortError') return
       console.error('[ranking] GET /api/rankings error', error)
@@ -2180,6 +2192,15 @@ export default function App() {
 
   const complete = (time) => {
     clearProgressSave()
+    setRankingSubmission({
+      status: 'idle',
+      error: '',
+      nickname: '',
+      position: null,
+      result: '',
+      clearTimeMs: null,
+    })
+    setPhotoEntryMode('ending')
     writeCompleteSave({
       completed: true,
       secretPhotoVisible: true,
@@ -2192,53 +2213,92 @@ export default function App() {
     setScreen('complete')
   }
 
-  const save = () => {
-    if (!name.trim()) return
-    const trimmedName = name.trim()
-    const next = [...ranking, {
-      name: trimmedName,
-      time: record,
-      date: new Date().toLocaleDateString(),
-    }].sort((a, b) => a.time - b.time).slice(0, 50)
+  const save = async () => {
+    if (rankingSubmission.status === 'loading') return
 
-    const rankingPosition = next.findIndex((item) => item.name === trimmedName && item.time === record)
-    writeCompleteSave({
-      completedNickname: trimmedName,
-      completedTime: record,
-      rankingPosition: rankingPosition >= 0 ? rankingPosition + 1 : null,
-      secretPhotoVisible: true,
-    })
+    const trimmedName = name.trim()
+    if (!trimmedName) return
 
     const clearTimeMs = Math.max(0, Math.round(record * 1000))
-    void fetch('/api/rankings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        nickname: trimmedName,
-        clearTimeMs,
-        gameVersion: '1.0.0'
-      })
+    setRankingSubmission({
+      status: 'loading',
+      error: '',
+      nickname: trimmedName,
+      position: null,
+      result: '',
+      clearTimeMs,
     })
-      .then(async (response) => {
-        if (response.ok) return
-        let body = ''
-        try {
-          body = await response.text()
-        } catch (error) {}
-        console.error('[ranking] POST /api/rankings failed', {
-          status: response.status,
-          body,
-        })
+
+    try {
+      const response = await fetch('/api/rankings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nickname: trimmedName,
+          clearTimeMs,
+          gameVersion: '1.0.0',
+        }),
       })
-      .catch((error) => {
-        console.error('[ranking] POST /api/rankings error', error)
+
+      let payload = null
+      try {
+        payload = await response.json()
+      } catch (error) {
+        payload = null
+      }
+
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || `POST /api/rankings failed (${response.status})`)
+      }
+
+      const appliedNickname = typeof payload.nickname === 'string' && payload.nickname.trim()
+        ? payload.nickname.trim()
+        : trimmedName
+      const appliedClearTimeMs = Number.isFinite(payload.clearTimeMs) ? payload.clearTimeMs : clearTimeMs
+      const appliedPosition = Number.isFinite(payload.position) ? payload.position : null
+      const appliedResult = typeof payload.result === 'string' ? payload.result : 'created'
+
+      const nextCompleteSave = writeCompleteSave({
+        completedNickname: appliedNickname,
+        completedTime: Math.max(0, Math.round(appliedClearTimeMs / 1000)),
+        rankingPosition: appliedPosition,
+        rankingResult: appliedResult,
+        rankingClearTimeMs: appliedClearTimeMs,
+        secretPhotoVisible: true,
       })
-    refreshSaveIndicators()
-    endingRunTokenRef.current += 1
-    resetEndingState()
-    setScreen('ranking')
+
+      setCompleteSave(nextCompleteSave)
+      if (Array.isArray(payload.rankings)) {
+        setRanking(normalizeRankingList(payload.rankings))
+      } else {
+        void fetchRankings()
+      }
+
+      setRankingSubmission({
+        status: 'success',
+        error: '',
+        nickname: appliedNickname,
+        position: appliedPosition,
+        result: appliedResult,
+        clearTimeMs: appliedClearTimeMs,
+      })
+      refreshSaveIndicators()
+      endingRunTokenRef.current += 1
+      resetEndingState()
+      setScreen('ranking')
+    } catch (error) {
+      console.error('[ranking] POST /api/rankings error', error)
+      setRankingSubmission({
+        status: 'error',
+        error: '랭킹 저장에 실패했습니다. 잠시 후 다시 시도해주세요.',
+        nickname: trimmedName,
+        position: null,
+        result: '',
+        clearTimeMs,
+      })
+    }
   }
 
   const ensureMusicForGame = () => {
@@ -2285,6 +2345,7 @@ export default function App() {
     }
     endingRunTokenRef.current += 1
     resetEndingState()
+    setPhotoEntryMode('secret')
     setScreen('photo')
   }
 
@@ -2353,7 +2414,8 @@ export default function App() {
   } else if (screen === 'complete' || screen === 'photo') {
     const isPhotoView = screen === 'photo'
     const photoName = completeSave?.completedNickname?.trim() || '-'
-    const rankingPosition = Number.isFinite(completeSave?.rankingPosition) ? completeSave.rankingPosition : getRankingPosition(photoName === '-' ? null : photoName, record)
+    const rankingPosition = Number.isFinite(completeSave?.rankingPosition) ? completeSave.rankingPosition : null
+    const secretPhotoButtonLabel = photoEntryMode === 'secret' ? '...' : 'ENDING 다시 보기'
     content = (
       <main className="complete-screen">
         <div className="confetti" aria-hidden="true">
@@ -2375,10 +2437,22 @@ export default function App() {
               <p className="record-label">완성 기록</p>
               <strong className="record-time">{fmt(record)}</strong>
               {!isPhotoView ? (
-                <div className="nickname-row">
-                  <input value={name} onChange={(event) => setName(event.target.value)} maxLength={12} placeholder="닉네임" />
-                  <button type="button" onClick={save}>랭킹 등록</button>
-                </div>
+                <>
+                  <div className="nickname-row">
+                    <input value={name} onChange={(event) => setName(event.target.value)} maxLength={12} placeholder="닉네임" />
+                    <button type="button" onClick={save} disabled={rankingSubmission.status === 'loading'}>{rankingSubmission.status === 'loading' ? '저장 중...' : '랭킹 등록'}</button>
+                  </div>
+                  {rankingSubmission.status === 'loading' && (
+                    <div className="photo-meta" role="status" aria-live="polite">
+                      <p>랭킹을 저장하는 중입니다...</p>
+                    </div>
+                  )}
+                  {rankingSubmission.status === 'error' && (
+                    <div className="photo-meta" role="alert" aria-live="assertive">
+                      <p>{rankingSubmission.error}</p>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="photo-meta" role="status" aria-live="polite">
                   <p>완료 닉네임: {photoName}</p>
@@ -2395,7 +2469,7 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <button type="button" className="replay-button" onClick={triggerEndingSequence}>ENDING 다시 보기</button>
+                  <button type="button" className="replay-button" onClick={triggerEndingSequence}>{secretPhotoButtonLabel}</button>
                   <button type="button" onClick={() => { endingRunTokenRef.current += 1; resetEndingState(); setScreen('start') }}>메인으로</button>
                 </>
               )}
@@ -2414,7 +2488,7 @@ export default function App() {
           {!rankingLoading && !rankingError && ranking.length === 0 && <p>아직 등록된 랭킹이 없습니다.</p>}
           {!rankingLoading && !rankingError && ranking.map((item, index) => (
             <div className="rank" key={item.id ?? `${item.name}-${item.time}-${index}`}>
-              <b>{index + 1}</b>
+              <b>{item.position ?? index + 1}</b>
               <span>{item.name}</span>
               <em>{fmt(item.time)}</em>
             </div>

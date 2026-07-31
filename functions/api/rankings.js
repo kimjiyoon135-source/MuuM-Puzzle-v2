@@ -1,4 +1,5 @@
 const DEFAULT_GAME_VERSION = '1.0.0'
+const MAX_RANKINGS = 5
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
 }
@@ -12,13 +13,61 @@ function json(data, status = 200) {
 
 async function fetchTopRankings(DB) {
   const result = await DB.prepare(
-    `SELECT id, nickname, clear_time_ms, game_version, created_at
-     FROM rankings
-     ORDER BY clear_time_ms ASC, created_at ASC
-     LIMIT 10`,
-  ).all()
+    `WITH ranked AS (
+       SELECT
+         id,
+         nickname,
+         clear_time_ms,
+         game_version,
+         created_at,
+         ROW_NUMBER() OVER (ORDER BY clear_time_ms ASC, created_at ASC, id ASC) AS position
+       FROM rankings
+     )
+     SELECT id, nickname, clear_time_ms, game_version, created_at, position
+     FROM ranked
+     ORDER BY position ASC
+     LIMIT ?1`,
+  )
+    .bind(MAX_RANKINGS)
+    .all()
 
   return Array.isArray(result?.results) ? result.results : []
+}
+
+async function fetchRankingByNickname(DB, nickname) {
+  const result = await DB.prepare(
+    `SELECT id, nickname, clear_time_ms, game_version, created_at
+     FROM rankings
+     WHERE nickname = ?1
+     LIMIT 1`,
+  )
+    .bind(nickname)
+    .all()
+
+  return result?.results?.[0] ?? null
+}
+
+async function fetchRankingPosition(DB, rankingId) {
+  const result = await DB.prepare(
+    `WITH ranked AS (
+       SELECT
+         id,
+         ROW_NUMBER() OVER (ORDER BY clear_time_ms ASC, created_at ASC, id ASC) AS position
+       FROM rankings
+     )
+     SELECT position
+     FROM ranked
+     WHERE id = ?1
+     LIMIT 1`,
+  )
+    .bind(rankingId)
+    .all()
+
+  return result?.results?.[0]?.position ?? null
+}
+
+function normalizeNickname(nickname) {
+  return typeof nickname === 'string' ? nickname.trim() : ''
 }
 
 function parseAndValidatePayload(payload) {
@@ -30,7 +79,7 @@ function parseAndValidatePayload(payload) {
     return { error: 'nickname must be a string.' }
   }
 
-  const nickname = payload.nickname.trim()
+  const nickname = normalizeNickname(payload.nickname)
   if (nickname.length < 1 || nickname.length > 12) {
     return { error: 'nickname length must be between 1 and 12.' }
   }
@@ -79,7 +128,7 @@ export async function onRequest(context) {
       let payload
       try {
         payload = await request.json()
-      } catch (error) {
+      } catch {
         return json({ success: false, error: 'Invalid JSON body.' }, 400)
       }
 
@@ -90,15 +139,40 @@ export async function onRequest(context) {
 
       const { nickname, clearTimeMs, gameVersion } = validated.value
 
+      const existingRanking = await fetchRankingByNickname(env.DB, nickname)
+
       await env.DB.prepare(
         `INSERT INTO rankings (nickname, clear_time_ms, game_version)
-         VALUES (?1, ?2, ?3)`,
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(nickname) DO UPDATE SET
+           clear_time_ms = excluded.clear_time_ms,
+           game_version = excluded.game_version
+         WHERE excluded.clear_time_ms < rankings.clear_time_ms`,
       )
         .bind(nickname, clearTimeMs, gameVersion)
         .run()
 
+      const currentRanking = await fetchRankingByNickname(env.DB, nickname)
+      if (!currentRanking) {
+        return json({ success: false, error: 'Failed to resolve ranking record.' }, 500)
+      }
+
+      let result = 'created'
+      if (existingRanking) {
+        result = currentRanking.clear_time_ms < existingRanking.clear_time_ms ? 'updated' : 'ignored'
+      }
+
+      const position = await fetchRankingPosition(env.DB, currentRanking.id)
       const rankings = await fetchTopRankings(env.DB)
-      return json({ success: true, rankings }, 200)
+      return json({
+        success: true,
+        result,
+        nickname: currentRanking.nickname,
+        clearTimeMs: currentRanking.clear_time_ms,
+        gameVersion: currentRanking.game_version,
+        position,
+        rankings,
+      }, 200)
     }
 
     return json({ success: false, error: 'Method not allowed.' }, 405)
