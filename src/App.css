@@ -394,7 +394,7 @@
   padding:26px 22px 24px;
   border-radius:22px;
   border:1px solid rgba(255,255,255,.08);
-  background:linear-gradient(180deg,rgba(17,22,36,.86) 0%,rgba(9,12,20,.9) 100%);
+  background:linear-gradient(180deg,rgba(20,26,42,.9) 0%,rgba(8,11,19,.94) 100%);
   box-shadow:0 24px 60px rgba(0,0,0,.34);
 }
 
@@ -413,9 +413,10 @@
 
 .ranking-description{
   margin:8px 0 18px;
-  color:rgba(227,232,247,.67);
+  color:rgba(230,236,250,.78);
   font-size:.86rem;
   letter-spacing:.01em;
+  line-height:1.4;
 }
 
 .ranking-celebration{
@@ -436,7 +437,7 @@
 
 .rank{
   display:grid;
-  grid-template-columns:58px 1fr auto;
+  grid-template-columns:58px minmax(0,1fr) auto;
   gap:14px;
   align-items:center;
   text-align:left;
@@ -492,7 +493,8 @@
 
 .rank-name-wrap{
   min-width:0;
-  display:flex;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
   align-items:center;
   gap:9px;
 }
@@ -511,10 +513,15 @@
   font-weight:800;
   letter-spacing:.04em;
   color:#f8fbff;
+  white-space:nowrap;
 }
 
 .rank-podium{
   background:linear-gradient(90deg,rgba(255,255,255,.04) 0%,rgba(255,255,255,.01) 100%);
+}
+
+.rank-podium-1{
+  background:linear-gradient(100deg,rgba(213,170,84,.12) 0%,rgba(252,236,179,.05) 28%,rgba(255,255,255,.015) 60%,rgba(255,255,255,.01) 100%);
 }
 
 .rank-podium .rank-name{
@@ -543,9 +550,12 @@
 .rank-my-record{
   border:1px solid rgba(162,205,255,.45);
   border-radius:14px;
-  margin:6px 0;
   background:linear-gradient(90deg,rgba(76,110,168,.22) 0%,rgba(36,53,85,.14) 100%);
   box-shadow:0 0 18px rgba(128,172,235,.18);
+}
+
+.rank-podium-1.rank-my-record{
+  background:linear-gradient(100deg,rgba(213,170,84,.1) 0%,rgba(252,236,179,.04) 20%,rgba(74,109,165,.2) 52%,rgba(36,53,85,.14) 100%);
 }
 
 .rank-badge{
@@ -576,6 +586,7 @@
   .ranking-description{
     margin:8px 0 14px;
     font-size:.8rem;
+    line-height:1.45;
   }
 
   .ranking-celebration{
@@ -610,6 +621,7 @@
   .rank-time{
     font-size:.88rem;
     letter-spacing:.02em;
+    margin-left:6px;
   }
 
   .rank-name-wrap{

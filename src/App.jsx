@@ -1675,6 +1675,7 @@ export default function App() {
     result: '',
     clearTimeMs: null,
   })
+  const [showRankingSubmissionFeedback, setShowRankingSubmissionFeedback] = useState(false)
   const audioRef = useRef(null)
   const queueRef = useRef([])
   const queuePositionRef = useRef(0)
@@ -2305,6 +2306,7 @@ export default function App() {
         result: appliedResult,
         clearTimeMs: appliedClearTimeMs,
       })
+      setShowRankingSubmissionFeedback(true)
       refreshSaveIndicators()
       endingRunTokenRef.current += 1
       resetEndingState()
@@ -2338,6 +2340,11 @@ export default function App() {
     refreshSaveIndicators()
     ensureMusicForGame()
     setScreen('game')
+  }
+
+  const openRankingFromStartScreen = () => {
+    setShowRankingSubmissionFeedback(false)
+    setScreen('ranking')
   }
 
   const continueSavedGameFromStartScreen = () => {
@@ -2506,7 +2513,7 @@ export default function App() {
       </main>
     )
   } else if (screen === 'ranking') {
-    const hasRecentSubmission = rankingSubmission.status === 'success' && !!rankingSubmission.nickname
+    const hasRecentSubmission = showRankingSubmissionFeedback && rankingSubmission.status === 'success' && !!rankingSubmission.nickname
     const recentRecordTimeSec = Number.isFinite(rankingSubmission.clearTimeMs)
       ? Math.max(0, Math.round(rankingSubmission.clearTimeMs / 1000))
       : null
@@ -2515,8 +2522,10 @@ export default function App() {
       : null
     const rankingCelebrationMessage = hasRecentSubmission && recentRankPosition === 1
       ? '현재 1위 기록입니다. 축하합니다!'
-      : hasRecentSubmission && Number.isFinite(recentRankPosition)
-        ? `현재 순위 ${recentRankPosition}위입니다.`
+      : hasRecentSubmission && Number.isFinite(recentRankPosition) && recentRankPosition >= 2 && recentRankPosition <= 5
+        ? `현재 ${recentRankPosition}위로 TOP 5에 등록되었습니다.`
+        : hasRecentSubmission && Number.isFinite(recentRankPosition)
+          ? `현재 ${recentRankPosition}위 기록입니다.`
         : ''
 
     content = (
@@ -2524,7 +2533,7 @@ export default function App() {
         <div className="ranking-card">
           <h1 className="ranking-title">RANKING</h1>
           <p className="ranking-kicker">Top 5 Clear Records</p>
-          <p className="ranking-description">동일 닉네임 등록시 최고 기록으로 자동 갱신됩니다.</p>
+          <p className="ranking-description">동일 닉네임은 기록 단축 시 자동 갱신됩니다.</p>
           {rankingCelebrationMessage && (
             <p className="ranking-celebration" role="status" aria-live="polite">{rankingCelebrationMessage}</p>
           )}
@@ -2536,10 +2545,12 @@ export default function App() {
               {ranking.map((item, index) => {
                 const position = item.position ?? index + 1
                 const isPodium = position >= 1 && position <= 3
+                const matchesRecentPosition = !Number.isFinite(recentRankPosition) || position === recentRankPosition
                 const isRecentRecord = hasRecentSubmission
                   && item.name === rankingSubmission.nickname
                   && recentRecordTimeSec != null
                   && item.time === recentRecordTimeSec
+                  && matchesRecentPosition
 
                 return (
                   <div
@@ -2582,7 +2593,7 @@ export default function App() {
               <button type="button" className="start-button" onClick={continueSavedGameFromStartScreen}>CONTINUE</button>
             )}
             <button type="button" className="start-button" onClick={startNewGameFromStartScreen}>NEW GAME</button>
-            <button type="button" className="start-button" onClick={() => setScreen('ranking')}>RANKING</button>
+            <button type="button" className="start-button" onClick={openRankingFromStartScreen}>RANKING</button>
           </div>
           {hasSecretPhotoUnlocked() && (
             <div className="hidden-secret-section" aria-label="Secret Photo Section">
