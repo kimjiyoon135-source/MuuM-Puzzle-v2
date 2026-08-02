@@ -387,6 +387,241 @@
   }
 }
 
+/* ranking screen: ceremonial but restrained */
+.ranking-card{
+  width:min(760px,100%);
+  text-align:center;
+  padding:26px 22px 24px;
+  border-radius:22px;
+  border:1px solid rgba(255,255,255,.08);
+  background:linear-gradient(180deg,rgba(17,22,36,.86) 0%,rgba(9,12,20,.9) 100%);
+  box-shadow:0 24px 60px rgba(0,0,0,.34);
+}
+
+.ranking-title{
+  margin:0;
+  letter-spacing:.16em;
+}
+
+.ranking-kicker{
+  margin:10px 0 0;
+  color:rgba(235,241,255,.88);
+  font-size:.8rem;
+  letter-spacing:.2em;
+  text-transform:uppercase;
+}
+
+.ranking-description{
+  margin:8px 0 18px;
+  color:rgba(227,232,247,.67);
+  font-size:.86rem;
+  letter-spacing:.01em;
+}
+
+.ranking-celebration{
+  margin:0 0 16px;
+  padding:9px 12px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.06);
+  color:#f8fbff;
+  font-weight:700;
+  font-size:.92rem;
+  letter-spacing:.02em;
+}
+
+.ranking-list{
+  margin-top:10px;
+}
+
+.rank{
+  display:grid;
+  grid-template-columns:58px 1fr auto;
+  gap:14px;
+  align-items:center;
+  text-align:left;
+  min-height:68px;
+  padding:12px 10px;
+  border-bottom:1px solid rgba(255,255,255,.09);
+}
+
+.rank-mark{
+  display:grid;
+  place-items:center;
+}
+
+.rank-number{
+  display:inline-grid;
+  place-items:center;
+  width:34px;
+  height:34px;
+  border-radius:50%;
+  border:1px solid rgba(255,255,255,.2);
+  color:rgba(235,240,255,.92);
+  font-size:.95rem;
+  font-weight:800;
+}
+
+.rank-medal{
+  display:inline-grid;
+  place-items:center;
+  width:38px;
+  height:38px;
+  border-radius:50%;
+  font-size:1rem;
+  font-weight:900;
+}
+
+.medal-1{
+  color:#3d2a00;
+  background:linear-gradient(160deg,#fbe7a3 0%,#d8ac3d 56%,#8c6121 100%);
+  box-shadow:0 0 16px rgba(235,188,80,.36);
+}
+
+.medal-2{
+  color:#202838;
+  background:linear-gradient(160deg,#f1f5ff 0%,#b7c2d8 58%,#7f8ba6 100%);
+  box-shadow:0 0 14px rgba(196,211,244,.28);
+}
+
+.medal-3{
+  color:#2c1708;
+  background:linear-gradient(160deg,#f3cba9 0%,#ba7a4a 58%,#7f4825 100%);
+  box-shadow:0 0 14px rgba(193,131,90,.28);
+}
+
+.rank-name-wrap{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:9px;
+}
+
+.rank-name{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-weight:700;
+  color:#f4f7ff;
+}
+
+.rank-time{
+  justify-self:end;
+  font-style:normal;
+  font-weight:800;
+  letter-spacing:.04em;
+  color:#f8fbff;
+}
+
+.rank-podium{
+  background:linear-gradient(90deg,rgba(255,255,255,.04) 0%,rgba(255,255,255,.01) 100%);
+}
+
+.rank-podium .rank-name{
+  font-size:1.02rem;
+  font-weight:800;
+}
+
+.rank-podium-1 .rank-name,
+.rank-podium-1 .rank-time{
+  color:#ffe9af;
+  text-shadow:0 0 10px rgba(225,177,83,.24);
+}
+
+.rank-podium-2 .rank-name,
+.rank-podium-2 .rank-time{
+  color:#e5eefc;
+  text-shadow:0 0 8px rgba(177,197,235,.22);
+}
+
+.rank-podium-3 .rank-name,
+.rank-podium-3 .rank-time{
+  color:#f3d2be;
+  text-shadow:0 0 8px rgba(187,128,88,.2);
+}
+
+.rank-my-record{
+  border:1px solid rgba(162,205,255,.45);
+  border-radius:14px;
+  margin:6px 0;
+  background:linear-gradient(90deg,rgba(76,110,168,.22) 0%,rgba(36,53,85,.14) 100%);
+  box-shadow:0 0 18px rgba(128,172,235,.18);
+}
+
+.rank-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  padding:3px 8px;
+  font-size:.66rem;
+  font-weight:900;
+  letter-spacing:.08em;
+  color:#dbebff;
+  background:rgba(95,142,221,.3);
+  border:1px solid rgba(152,193,255,.45);
+  white-space:nowrap;
+}
+
+@media(max-width:700px){
+  .ranking-card{
+    padding:20px 14px 18px;
+    border-radius:16px;
+  }
+
+  .ranking-kicker{
+    font-size:.72rem;
+  }
+
+  .ranking-description{
+    margin:8px 0 14px;
+    font-size:.8rem;
+  }
+
+  .ranking-celebration{
+    margin-bottom:12px;
+    font-size:.84rem;
+    padding:8px 10px;
+  }
+
+  .rank{
+    grid-template-columns:46px minmax(0,1fr) auto;
+    gap:10px;
+    min-height:60px;
+    padding:10px 6px;
+  }
+
+  .rank-medal{
+    width:32px;
+    height:32px;
+    font-size:.9rem;
+  }
+
+  .rank-number{
+    width:30px;
+    height:30px;
+    font-size:.84rem;
+  }
+
+  .rank-name{
+    font-size:.92rem;
+  }
+
+  .rank-time{
+    font-size:.88rem;
+    letter-spacing:.02em;
+  }
+
+  .rank-name-wrap{
+    gap:7px;
+  }
+
+  .rank-badge{
+    font-size:.58rem;
+    padding:2px 6px;
+  }
+}
+
 /* v12 쨌 start screen subtle premium motion */
 .start-screen{position:relative;overflow:hidden}
 .start-screen .background-image,

@@ -2506,20 +2506,63 @@ export default function App() {
       </main>
     )
   } else if (screen === 'ranking') {
+    const hasRecentSubmission = rankingSubmission.status === 'success' && !!rankingSubmission.nickname
+    const recentRecordTimeSec = Number.isFinite(rankingSubmission.clearTimeMs)
+      ? Math.max(0, Math.round(rankingSubmission.clearTimeMs / 1000))
+      : null
+    const recentRankPosition = Number.isFinite(rankingSubmission.position)
+      ? rankingSubmission.position
+      : null
+    const rankingCelebrationMessage = hasRecentSubmission && recentRankPosition === 1
+      ? '현재 1위 기록입니다. 축하합니다!'
+      : hasRecentSubmission && Number.isFinite(recentRankPosition)
+        ? `현재 순위 ${recentRankPosition}위입니다.`
+        : ''
+
     content = (
       <main className="ranking-screen">
         <div className="ranking-card">
-          <h1>RANKING</h1>
+          <h1 className="ranking-title">RANKING</h1>
+          <p className="ranking-kicker">Top 5 Clear Records</p>
+          <p className="ranking-description">동일 닉네임 등록시 최고 기록으로 자동 갱신됩니다.</p>
+          {rankingCelebrationMessage && (
+            <p className="ranking-celebration" role="status" aria-live="polite">{rankingCelebrationMessage}</p>
+          )}
           {rankingLoading && <p role="status" aria-live="polite">랭킹 불러오는 중...</p>}
           {!rankingLoading && rankingError && <p role="alert">{rankingError}</p>}
           {!rankingLoading && !rankingError && ranking.length === 0 && <p>아직 등록된 랭킹이 없습니다.</p>}
-          {!rankingLoading && !rankingError && ranking.map((item, index) => (
-            <div className="rank" key={item.id ?? `${item.name}-${item.time}-${index}`}>
-              <b>{item.position ?? index + 1}</b>
-              <span>{item.name}</span>
-              <em>{fmt(item.time)}</em>
+          {!rankingLoading && !rankingError && ranking.length > 0 && (
+            <div className="ranking-list" aria-label="Top 5 Rankings">
+              {ranking.map((item, index) => {
+                const position = item.position ?? index + 1
+                const isPodium = position >= 1 && position <= 3
+                const isRecentRecord = hasRecentSubmission
+                  && item.name === rankingSubmission.nickname
+                  && recentRecordTimeSec != null
+                  && item.time === recentRecordTimeSec
+
+                return (
+                  <div
+                    className={`rank ${isPodium ? `rank-podium rank-podium-${position}` : ''} ${isRecentRecord ? 'rank-my-record' : ''}`.trim()}
+                    key={item.id ?? `${item.name}-${item.time}-${index}`}
+                  >
+                    <div className="rank-mark" aria-hidden="true">
+                      {isPodium ? (
+                        <span className={`rank-medal medal-${position}`}>{position}</span>
+                      ) : (
+                        <b className="rank-number">{position}</b>
+                      )}
+                    </div>
+                    <div className="rank-name-wrap">
+                      <span className="rank-name">{item.name}</span>
+                      {isRecentRecord && <span className="rank-badge">MY RECORD</span>}
+                    </div>
+                    <em className="rank-time">{fmt(item.time)}</em>
+                  </div>
+                )
+              })}
             </div>
-          ))}
+          )}
           <button type="button" onClick={() => setScreen('start')}>처음으로</button>
         </div>
       </main>
