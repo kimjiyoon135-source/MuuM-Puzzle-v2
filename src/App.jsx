@@ -16,9 +16,9 @@ const PIECE_SPAWN_VOLUME = 0.45
 const PIECE_CONNECT_SFX = '/sounds/piece-connect.mp3'
 const PIECE_CONNECT_VOLUME = 0.45
 const CAMERA_DELAY_AFTER_PIECE_FIT = 120
-const LEGACY_PUZZLE_STATE_STORAGE_KEY = 'muum-puzzle-state-v1'
-const PROGRESS_SAVE_STORAGE_KEY = 'muum-puzzle-progress-v1'
-const COMPLETE_SAVE_STORAGE_KEY = 'muum-puzzle-complete-v1'
+const LEGACY_PUZZLE_STATE_STORAGE_KEY = 'muum-puzzle-state-v1.0.0'
+const PROGRESS_SAVE_STORAGE_KEY = 'muum-puzzle-progress-v1.0.0'
+const COMPLETE_SAVE_STORAGE_KEY = 'muum-puzzle-complete-v1.0.0'
 const DOOR_OPEN_SFX = '/sounds/door-open.mp3'
 const FOOT_STEP_SFX = '/sounds/foot.mp3'
 
@@ -29,8 +29,7 @@ const TRACKS = [
   { title: '연희동 뒷골목', src: '/music/yeonhui-alley.mp3' },
 ]
 
-const APP_VERSION_LABEL = `Alpha v${pkg.version}`
-
+const APP_VERSION_LABEL = `v${pkg.version}`
 function shuffledIndexes(avoidFirst = null) {
   const indexes = TRACKS.map((_, index) => index)
   for (let index = indexes.length - 1; index > 0; index -= 1) {
